@@ -1,0 +1,1069 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Libro Mayor — Cartera & Vehículos</title>
+<meta name="description" content="Control de préstamos, ventas de vehículos y socios capitalistas.">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#15201A">
+<meta property="og:title" content="Libro Mayor — Cartera & Vehículos">
+<meta property="og:description" content="Control de préstamos, ventas de vehículos y socios capitalistas, con sincronización por token.">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700;1,9..144,500&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg-deep:#15201A;
+    --bg-deep2:#1F2D22;
+    --paper:#F6F1E4;
+    --paper2:#EDE5CF;
+    --ink:#20281F;
+    --ink-soft:#5B6753;
+    --gold:#B6873A;
+    --gold-dark:#8C6526;
+    --rojo:#8C3B2E;
+    --verde:#3E6B4F;
+    --line:#CBBE9C;
+    --shadow:0 8px 24px rgba(21,32,26,.18);
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg-deep);color:var(--ink);font-family:'Inter',sans-serif;min-height:100vh;}
+  .display{font-family:'Fraunces',serif;}
+  .mono{font-family:'IBM Plex Mono',monospace;}
+  button{font-family:inherit;cursor:pointer;}
+  input,select,textarea{font-family:inherit;}
+
+  /* ===== LOGIN ===== */
+  #loginScreen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;
+    background:
+      radial-gradient(circle at 20% 20%, rgba(182,135,58,.10), transparent 45%),
+      radial-gradient(circle at 80% 80%, rgba(182,135,58,.08), transparent 45%),
+      var(--bg-deep);}
+  .login-card{background:var(--paper);width:100%;max-width:420px;border-radius:4px;padding:40px 32px 32px;
+    box-shadow:var(--shadow);position:relative;border:1px solid var(--line);}
+  .login-card::before{content:"";position:absolute;top:0;left:0;right:0;height:6px;
+    background:repeating-linear-gradient(90deg,var(--gold) 0 14px, transparent 14px 22px);
+    border-radius:4px 4px 0 0;}
+  .stamp{width:64px;height:64px;border:3px solid var(--gold-dark);border-radius:50%;display:flex;
+    align-items:center;justify-content:center;margin:0 auto 18px;transform:rotate(-6deg);color:var(--gold-dark);}
+  .stamp svg{width:32px;height:32px;}
+  .login-card h1{font-size:1.5rem;text-align:center;margin:0 0 4px;letter-spacing:.01em;}
+  .login-card p.sub{text-align:center;color:var(--ink-soft);margin:0 0 28px;font-size:.92rem;}
+  .field{margin-bottom:16px;}
+  .field label{display:block;font-size:.78rem;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);margin-bottom:6px;font-weight:600;}
+  .field input,.field select,.field textarea{width:100%;padding:11px 13px;border:1.5px solid var(--line);
+    border-radius:3px;background:#fff;font-size:.95rem;color:var(--ink);}
+  .field input:focus,.field select:focus,.field textarea:focus{outline:2px solid var(--gold);outline-offset:1px;border-color:var(--gold);}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:none;border-radius:3px;
+    padding:11px 18px;font-weight:600;font-size:.88rem;letter-spacing:.01em;transition:transform .08s, opacity .15s;}
+  .btn:active{transform:scale(.97);}
+  .btn-primary{background:var(--bg-deep);color:var(--paper);width:100%;}
+  .btn-primary:hover{background:var(--bg-deep2);}
+  .btn-gold{background:var(--gold);color:#2b1c08;}
+  .btn-gold:hover{background:var(--gold-dark);color:#fff;}
+  .btn-ghost{background:transparent;color:var(--ink-soft);border:1.5px solid var(--line);}
+  .btn-ghost:hover{border-color:var(--ink-soft);}
+  .btn-wa{background:#3E6B4F;color:#fff;}
+  .btn-print{background:var(--bg-deep2);color:var(--paper);}
+  .btn-danger{background:var(--rojo);color:#fff;}
+  .btn-sm{padding:7px 11px;font-size:.78rem;border-radius:3px;}
+  .login-divider{display:flex;align-items:center;gap:10px;margin:22px 0;color:var(--ink-soft);font-size:.78rem;}
+  .login-divider::before,.login-divider::after{content:"";flex:1;height:1px;background:var(--line);}
+  .link-btn{background:none;border:none;color:var(--gold-dark);text-decoration:underline;font-size:.85rem;
+    width:100%;text-align:center;font-weight:600;}
+  #createBox{display:none;margin-top:16px;border-top:1px dashed var(--line);padding-top:16px;}
+  .msg{font-size:.82rem;border-radius:3px;padding:9px 12px;margin-top:10px;}
+  .msg-err{background:#F7E2DD;color:var(--rojo);}
+  .msg-ok{background:#E2EEE5;color:var(--verde);}
+
+  /* ===== APP SHELL ===== */
+  #appShell{display:none;min-height:100vh;background:var(--paper2);}
+  header.topbar{background:var(--bg-deep);color:var(--paper);padding:14px 20px;display:flex;align-items:center;
+    justify-content:space-between;gap:12px;flex-wrap:wrap;position:sticky;top:0;z-index:30;box-shadow:var(--shadow);}
+  .brand{display:flex;align-items:center;gap:10px;}
+  .brand .stamp{width:36px;height:36px;margin:0;border-width:2px;border-color:var(--gold);color:var(--gold);}
+  .brand .stamp svg{width:18px;height:18px;}
+  .brand-name{font-family:'Fraunces',serif;font-size:1.15rem;font-weight:600;line-height:1.1;}
+  .brand-name small{display:block;font-family:'Inter';font-size:.66rem;color:#C9C2AE;font-weight:500;letter-spacing:.05em;text-transform:uppercase;}
+  .topbar-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+  .token-pill{background:var(--bg-deep2);border:1px solid #3a4a3d;color:var(--gold);padding:7px 12px;border-radius:20px;
+    font-size:.78rem;display:flex;align-items:center;gap:8px;}
+  .icon-btn{background:var(--bg-deep2);color:var(--paper);border:1px solid #3a4a3d;width:36px;height:36px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;}
+  .icon-btn:hover{background:#2a3b2e;}
+  .icon-btn svg{width:17px;height:17px;}
+
+  nav.tabs{display:flex;gap:2px;background:var(--bg-deep2);padding:0 16px;overflow-x:auto;}
+  nav.tabs button{background:transparent;border:none;color:#C9C2AE;padding:13px 16px;font-weight:600;font-size:.85rem;
+    border-bottom:3px solid transparent;white-space:nowrap;}
+  nav.tabs button.active{color:var(--gold);border-bottom-color:var(--gold);}
+
+  main{max-width:1080px;margin:0 auto;padding:24px 20px 80px;}
+  .section-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;flex-wrap:wrap;gap:10px;}
+  .section-head h2{font-family:'Fraunces',serif;font-size:1.4rem;margin:0;}
+  .section-head p{color:var(--ink-soft);font-size:.85rem;margin:2px 0 0;}
+
+  .grid-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:24px;}
+  .stat-card{background:var(--paper);border:1px solid var(--line);border-radius:4px;padding:16px;}
+  .stat-card .lbl{font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft);font-weight:600;}
+  .stat-card .val{font-family:'IBM Plex Mono',monospace;font-size:1.5rem;font-weight:600;margin-top:4px;}
+
+  .card-list{display:flex;flex-direction:column;gap:12px;}
+  .item-card{background:var(--paper);border:1px solid var(--line);border-radius:4px;padding:16px 18px;position:relative;}
+  .item-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap;}
+  .item-title{font-family:'Fraunces',serif;font-weight:600;font-size:1.05rem;}
+  .item-sub{font-size:.82rem;color:var(--ink-soft);margin-top:2px;}
+  .item-amount{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:1.1rem;text-align:right;}
+  .item-amount small{display:block;font-family:'Inter';font-weight:600;font-size:.66rem;text-transform:uppercase;color:var(--ink-soft);}
+  .sello{display:inline-block;border:2px solid;border-radius:4px;padding:2px 9px;font-size:.68rem;font-weight:700;
+    letter-spacing:.06em;text-transform:uppercase;transform:rotate(-3deg);margin-top:6px;}
+  .sello-ok{color:var(--verde);border-color:var(--verde);}
+  .sello-pend{color:var(--gold-dark);border-color:var(--gold-dark);}
+  .sello-venc{color:var(--rojo);border-color:var(--rojo);}
+  .item-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:12px;border-top:1px dashed var(--line);padding-top:12px;}
+  .item-meta{font-size:.78rem;color:var(--ink-soft);margin-top:8px;line-height:1.5;}
+  .empty-state{text-align:center;padding:50px 20px;color:var(--ink-soft);}
+  .empty-state .stamp{opacity:.4;}
+
+  .fab{position:fixed;bottom:24px;right:24px;background:var(--gold);color:#2b1c08;border:none;border-radius:50%;
+    width:58px;height:58px;font-size:1.8rem;box-shadow:var(--shadow);z-index:25;}
+
+  /* ===== MODAL ===== */
+  .modal-overlay{display:none;position:fixed;inset:0;background:rgba(21,32,26,.55);z-index:50;align-items:flex-start;
+    justify-content:center;padding:24px 16px;overflow-y:auto;}
+  .modal{background:var(--paper);width:100%;max-width:520px;border-radius:5px;padding:26px 24px;margin:auto 0;box-shadow:var(--shadow);}
+  .modal h3{font-family:'Fraunces',serif;margin:0 0 16px;font-size:1.25rem;}
+  .modal-actions{display:flex;gap:10px;margin-top:18px;justify-content:flex-end;flex-wrap:wrap;}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  .habeas-note{font-size:.74rem;color:var(--ink-soft);background:var(--paper2);border-radius:3px;padding:8px 10px;margin-top:14px;line-height:1.5;}
+  .abono-list{max-height:140px;overflow-y:auto;border:1px solid var(--line);border-radius:3px;padding:8px 10px;background:#fff;margin-top:6px;}
+  .abono-row{display:flex;justify-content:space-between;font-size:.82rem;padding:4px 0;border-bottom:1px dashed var(--line);}
+  .abono-row:last-child{border-bottom:none;}
+
+  /* ===== RECEIPT / PRINT ===== */
+  .receipt{background:#fff;width:100%;max-width:380px;margin:0 auto;padding:22px 20px;border:1px solid var(--line);
+    position:relative;font-family:'IBM Plex Mono',monospace;font-size:.82rem;color:var(--ink);}
+  .receipt::before,.receipt::after{content:"";position:absolute;left:0;right:0;height:14px;
+    background-image:radial-gradient(circle, var(--bg-deep) 5px, transparent 5.5px);
+    background-size:16px 16px;background-position:0 -3px;}
+  .receipt::before{top:-7px;}
+  .receipt::after{bottom:-7px;background-position:0 7px;}
+  .receipt h4{font-family:'Fraunces',serif;text-align:center;margin:0 0 2px;font-size:1.1rem;}
+  .receipt .sub{text-align:center;font-size:.7rem;color:var(--ink-soft);margin-bottom:14px;}
+  .receipt hr{border:none;border-top:1px dashed var(--line);margin:10px 0;}
+  .receipt .rline{display:flex;justify-content:space-between;margin:3px 0;}
+  .receipt .total{font-weight:700;font-size:1rem;}
+  .receipt .foot{text-align:center;font-size:.66rem;color:var(--ink-soft);margin-top:14px;}
+
+  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--bg-deep);color:var(--paper);
+    padding:11px 20px;border-radius:24px;font-size:.85rem;z-index:99;box-shadow:var(--shadow);display:none;}
+
+  .admin-panel .tok-display{font-family:'IBM Plex Mono',monospace;background:var(--bg-deep);color:var(--gold);
+    padding:14px;border-radius:4px;font-size:1.1rem;letter-spacing:.08em;text-align:center;margin:10px 0;}
+  .toggle-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px dashed var(--line);}
+  .switch{position:relative;width:42px;height:24px;}
+  .switch input{opacity:0;width:0;height:0;}
+  .slider{position:absolute;inset:0;background:var(--line);border-radius:24px;transition:.2s;cursor:pointer;}
+  .slider::before{content:"";position:absolute;width:18px;height:18px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s;}
+  input:checked + .slider{background:var(--verde);}
+  input:checked + .slider::before{transform:translateX(18px);}
+
+  footer.dev-credit{text-align:center;font-size:.68rem;color:#9aa394;padding:18px 12px 28px;}
+
+  @media print{
+    body *{visibility:hidden;}
+    #printArea, #printArea *{visibility:visible;}
+    #printArea{position:absolute;top:0;left:0;width:100%;}
+  }
+  @media (max-width:560px){
+    .row2{grid-template-columns:1fr;}
+    main{padding:18px 12px 90px;}
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ LOGIN ============ -->
+<div id="loginScreen">
+  <div class="login-card">
+    <div class="stamp"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10h18M7 15h2m4 0h4M5 5h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2z"/></svg></div>
+    <h1 class="display">Libro Mayor</h1>
+    <p class="sub">Cartera de préstamos &amp; vehículos</p>
+
+    <div class="field">
+      <label for="tokenInput">Código de acceso (token)</label>
+      <input id="tokenInput" placeholder="Ej: CAUCASIA-001" autocomplete="off">
+    </div>
+    <button class="btn btn-primary" onclick="App.ingresar()">Ingresar al negocio</button>
+    <div id="loginMsg"></div>
+
+    <div class="login-divider">o</div>
+    <button class="link-btn" onclick="App.toggleCreate()">Soy el administrador — crear negocio nuevo</button>
+
+    <div id="createBox">
+      <div class="field">
+        <label for="negNombre">Nombre del negocio</label>
+        <input id="negNombre" placeholder="Ej: Préstamos &amp; Vehículos Caucasia">
+      </div>
+      <div class="field">
+        <label for="negTel">Celular del administrador</label>
+        <input id="negTel" value="3117700431">
+      </div>
+      <button class="btn btn-gold" style="width:100%" onclick="App.crearNegocio()">Generar token y crear negocio</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ APP SHELL ============ -->
+<div id="appShell">
+  <header class="topbar">
+    <div class="brand">
+      <div class="stamp"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10h18M7 15h2m4 0h4M5 5h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2z"/></svg></div>
+      <div class="brand-name"><span id="negNombreLbl">—</span><small>Libro Mayor</small></div>
+    </div>
+    <div class="topbar-actions">
+      <div class="token-pill">🔑 <span id="tokenLbl" class="mono"></span></div>
+      <button class="icon-btn" title="Backup" onclick="App.backup()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>
+      </button>
+      <button class="icon-btn" title="Restaurar backup" onclick="document.getElementById('restoreFile').click()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21V9m0 0l-4 4m4-4l4 4M4 7V5a2 2 0 012-2h12a2 2 0 012 2v2"/></svg>
+      </button>
+      <input type="file" id="restoreFile" accept="application/json" style="display:none" onchange="App.restore(event)">
+      <button class="icon-btn" title="Administración" onclick="App.openAdmin()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.34 1.87l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.7 1.7 0 00-1.87-.34 1.7 1.7 0 00-1 1.56V21a2 2 0 11-4 0v-.09A1.7 1.7 0 008.6 19.4a1.7 1.7 0 00-1.87.34l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.7 1.7 0 004.6 15a1.7 1.7 0 00-1.56-1H3a2 2 0 110-4h.09A1.7 1.7 0 004.6 8.6a1.7 1.7 0 00-.34-1.87l-.06-.06a2 2 0 112.83-2.83l.06.06A1.7 1.7 0 008.6 4.6a1.7 1.7 0 001-1.56V3a2 2 0 114 0v.09a1.7 1.7 0 001 1.56 1.7 1.7 0 001.87-.34l.06-.06a2 2 0 112.83 2.83l-.06.06A1.7 1.7 0 0019.4 8.6a1.7 1.7 0 001.56 1H21a2 2 0 110 4h-.09a1.7 1.7 0 00-1.56 1z"/></svg>
+      </button>
+      <button class="icon-btn" title="Salir" onclick="App.logout()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4m7 14l5-5-5-5M21 12H9"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <nav class="tabs" id="tabsNav"></nav>
+
+  <main id="mainContent"></main>
+
+  <button class="fab" id="fabBtn" onclick="App.fabAction()">+</button>
+
+  <footer class="dev-credit">Desarrollada por Vibras Positivas HM — Derechos de Autor Reservados</footer>
+</div>
+
+<!-- ============ MODAL GENÉRICO ============ -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal" id="modalBody"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* =========================================================
+   ESTADO Y PERSISTENCIA
+   ========================================================= */
+const App = {
+  token: null,
+  data: null,
+  activeTab: 'resumen',
+  editing: null, // {type, id}
+  adminMode: false,
+
+  STORAGE_PREFIX: 'negocio',
+
+  blank(){
+    return {
+      info: { nombre:'', telefonoAdmin:'3117700431', creado:new Date().toISOString() },
+      socios: [],
+      clientes: [],
+      prestamos: [],
+      vehiculos: [],
+      movimientos: []
+    };
+  },
+
+  uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); },
+
+  fmtMoney(n){
+    n = Number(n)||0;
+    return '$' + n.toLocaleString('es-CO', {maximumFractionDigits:0});
+  },
+
+  fmtDate(d){
+    if(!d) return '—';
+    const dt = new Date(d);
+    return dt.toLocaleDateString('es-CO', {day:'2-digit',month:'short',year:'numeric'});
+  },
+
+  todayISO(){
+    const tz = new Date().toLocaleString('en-US',{timeZone:'America/Bogota'});
+    return new Date(tz).toISOString().slice(0,10);
+  },
+
+  toast(msg){
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.style.display = 'block';
+    clearTimeout(this._toastT);
+    this._toastT = setTimeout(()=> t.style.display='none', 2600);
+  },
+
+  genToken(){
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let s = '';
+    for(let i=0;i<6;i++) s += chars[Math.floor(Math.random()*chars.length)];
+    return 'CAU-' + s;
+  },
+
+  async save(){
+    try{
+      const r = await window.storage.set(`${this.STORAGE_PREFIX}:${this.token}`, JSON.stringify(this.data), true);
+      if(!r){ this.toast('⚠️ No se pudo guardar. Intenta de nuevo.'); }
+    }catch(e){
+      console.error(e);
+      this.toast('⚠️ Error guardando los datos.');
+    }
+  },
+
+  toggleCreate(){
+    const box = document.getElementById('createBox');
+    box.style.display = box.style.display === 'block' ? 'none' : 'block';
+  },
+
+  async crearNegocio(){
+    const nombre = document.getElementById('negNombre').value.trim();
+    const tel = document.getElementById('negTel').value.trim() || '3117700431';
+    if(!nombre){ this.loginMsg('Escribe el nombre del negocio.', true); return; }
+    const tok = this.genToken();
+    const d = this.blank();
+    d.info.nombre = nombre;
+    d.info.telefonoAdmin = tel;
+    try{
+      await window.storage.set(`${this.STORAGE_PREFIX}:${tok}`, JSON.stringify(d), true);
+      this.loginMsg(`Negocio creado. Tu token es ${tok}. Guárdalo: lo necesitarás para entrar desde otro celular o PC.`, false);
+      document.getElementById('tokenInput').value = tok;
+    }catch(e){
+      console.error(e);
+      this.loginMsg('No se pudo crear el negocio. Intenta de nuevo.', true);
+    }
+  },
+
+  loginMsg(text, isErr){
+    const el = document.getElementById('loginMsg');
+    el.innerHTML = `<div class="msg ${isErr?'msg-err':'msg-ok'}">${text}</div>`;
+  },
+
+  async ingresar(){
+    const tok = document.getElementById('tokenInput').value.trim().toUpperCase();
+    if(!tok){ this.loginMsg('Ingresa el código del negocio.', true); return; }
+    try{
+      const r = await window.storage.get(`${this.STORAGE_PREFIX}:${tok}`, true);
+      if(!r){ this.loginMsg('Ese código no existe todavía. Si eres el administrador, créalo abajo.', true); return; }
+      this.token = tok;
+      this.data = JSON.parse(r.value);
+      // migración suave de campos faltantes
+      this.data.socios = this.data.socios || [];
+      this.data.clientes = this.data.clientes || [];
+      this.data.prestamos = this.data.prestamos || [];
+      this.data.vehiculos = this.data.vehiculos || [];
+      this.data.movimientos = this.data.movimientos || [];
+      this.boot();
+    }catch(e){
+      this.loginMsg('Ese código no existe todavía. Si eres el administrador, créalo abajo.', true);
+    }
+  },
+
+  logout(){
+    this.token = null; this.data = null; this.adminMode = false;
+    document.getElementById('appShell').style.display = 'none';
+    document.getElementById('loginScreen').style.display = 'flex';
+  },
+
+  boot(){
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('appShell').style.display = 'block';
+    document.getElementById('negNombreLbl').textContent = this.data.info.nombre || 'Negocio';
+    document.getElementById('tokenLbl').textContent = this.token;
+    this.renderTabs();
+    this.goTab('resumen');
+  },
+
+  /* =========================================================
+     NAVEGACIÓN
+     ========================================================= */
+  renderTabs(){
+    const tabs = [
+      ['resumen','Resumen'],
+      ['clientes','Clientes'],
+      ['prestamos','Préstamos'],
+      ['vehiculos','Vehículos'],
+      ['socios','Socios'],
+      ['movimientos','Movimientos']
+    ];
+    document.getElementById('tabsNav').innerHTML = tabs.map(([id,lbl])=>
+      `<button class="${this.activeTab===id?'active':''}" onclick="App.goTab('${id}')">${lbl}</button>`
+    ).join('');
+  },
+
+  goTab(id){
+    this.activeTab = id;
+    this.renderTabs();
+    const fab = document.getElementById('fabBtn');
+    fab.style.display = ['movimientos','resumen'].includes(id) ? 'none' : 'flex';
+    const renderers = {
+      resumen: ()=>this.renderResumen(),
+      clientes: ()=>this.renderClientes(),
+      prestamos: ()=>this.renderPrestamos(),
+      vehiculos: ()=>this.renderVehiculos(),
+      socios: ()=>this.renderSocios(),
+      movimientos: ()=>this.renderMovimientos()
+    };
+    (renderers[id]||(()=>{}))();
+  },
+
+  fabAction(){
+    const map = {clientes:'cliente', prestamos:'prestamo', vehiculos:'vehiculo', socios:'socio'};
+    const t = map[this.activeTab];
+    if(t) this.openForm(t, null);
+  },
+
+  maskPhone(p){
+    if(!p) return '—';
+    if(this.adminMode) return p;
+    if(p.length<7) return p;
+    return p.slice(0,3) + '••••' + p.slice(-2);
+  },
+  maskAddr(a){
+    if(!a) return '—';
+    if(this.adminMode) return a;
+    return a.length>10 ? a.slice(0,8)+'…' : a;
+  },
+
+  clienteNombre(id){
+    const c = this.data.clientes.find(x=>x.id===id);
+    return c ? c.nombre : '(sin cliente)';
+  },
+  socioNombre(id){
+    const s = this.data.socios.find(x=>x.id===id);
+    return s ? s.nombre : '—';
+  },
+
+  /* =========================================================
+     RESUMEN
+     ========================================================= */
+  renderResumen(){
+    const d = this.data;
+    const totalPrestado = d.prestamos.reduce((a,p)=>a+p.monto,0);
+    const saldoPrestamos = d.prestamos.reduce((a,p)=>a+this.saldoPrestamo(p),0);
+    const saldoVehiculos = d.vehiculos.reduce((a,v)=>a+this.saldoVehiculo(v),0);
+    const capitalSocios = d.socios.reduce((a,s)=>a+(Number(s.capital)||0),0);
+    document.getElementById('mainContent').innerHTML = `
+      <div class="section-head"><div><h2>Resumen general</h2><p>${d.info.nombre}</p></div></div>
+      <div class="grid-cards">
+        <div class="stat-card"><div class="lbl">Clientes</div><div class="val">${d.clientes.length}</div></div>
+        <div class="stat-card"><div class="lbl">Préstamos activos</div><div class="val">${d.prestamos.filter(p=>this.saldoPrestamo(p)>0).length}</div></div>
+        <div class="stat-card"><div class="lbl">Cartera por cobrar</div><div class="val">${this.fmtMoney(saldoPrestamos)}</div></div>
+        <div class="stat-card"><div class="lbl">Vehículos en venta</div><div class="val">${d.vehiculos.filter(v=>this.saldoVehiculo(v)>0).length}</div></div>
+        <div class="stat-card"><div class="lbl">Saldo vehículos</div><div class="val">${this.fmtMoney(saldoVehiculos)}</div></div>
+        <div class="stat-card"><div class="lbl">Capital de socios</div><div class="val">${this.fmtMoney(capitalSocios)}</div></div>
+      </div>
+      <div class="section-head"><h2 style="font-size:1.1rem">Últimos movimientos</h2></div>
+      <div class="card-list">${this.movimientosHTML(d.movimientos.slice().reverse().slice(0,6))}</div>
+    `;
+  },
+
+  /* =========================================================
+     SALDOS
+     ========================================================= */
+  saldoPrestamo(p){
+    const abonado = (p.abonos||[]).reduce((a,x)=>a+Number(x.monto),0);
+    return Math.max(0, Number(p.monto) - abonado);
+  },
+  saldoVehiculo(v){
+    const abonado = (v.abonos||[]).reduce((a,x)=>a+Number(x.monto),0);
+    return Math.max(0, Number(v.precio) - abonado);
+  },
+  estadoSello(saldo, fechaLimite){
+    if(saldo<=0) return ['PAGADO','sello-ok'];
+    if(fechaLimite && new Date(fechaLimite) < new Date(this.todayISO())) return ['VENCIDO','sello-venc'];
+    return ['PENDIENTE','sello-pend'];
+  },
+
+  /* =========================================================
+     CLIENTES
+     ========================================================= */
+  renderClientes(){
+    const list = this.data.clientes;
+    document.getElementById('mainContent').innerHTML = `
+      <div class="section-head"><div><h2>Clientes</h2><p>${list.length} registrados</p></div>
+        <div><button class="icon-btn" title="${this.adminMode?'Ocultar datos':'Ver datos completos'}" onclick="App.toggleAdminMode()">${this.adminMode?'🙈':'👁️'}</button></div>
+      </div>
+      <div class="card-list">${list.length? list.map(c=>this.clienteCard(c)).join('') : this.empty('Aún no hay clientes. Usa el botón + para agregar el primero.')}</div>
+    `;
+  },
+  clienteCard(c){
+    return `<div class="item-card">
+      <div class="item-top">
+        <div><div class="item-title">${c.nombre}</div>
+        <div class="item-sub">📞 ${this.maskPhone(c.celular)} · 📍 ${this.maskAddr(c.direccion)}</div></div>
+      </div>
+      ${c.observaciones?`<div class="item-meta">📝 ${c.observaciones}</div>`:''}
+      <div class="item-meta">Forma de pago: <strong>${c.formaPago||'—'}</strong></div>
+      <div class="item-actions">
+        <button class="btn btn-sm btn-ghost" onclick="App.openForm('cliente','${c.id}')">✏️ Editar</button>
+        <button class="btn btn-sm btn-print" onclick="App.imprimirFicha('cliente','${c.id}')">🖨️ Imprimir</button>
+        <button class="btn btn-sm btn-wa" onclick="App.whatsappFicha('cliente','${c.id}')">💬 WhatsApp</button>
+      </div>
+    </div>`;
+  },
+
+  /* =========================================================
+     PRÉSTAMOS
+     ========================================================= */
+  renderPrestamos(){
+    const list = this.data.prestamos.slice().reverse();
+    document.getElementById('mainContent').innerHTML = `
+      <div class="section-head"><div><h2>Préstamos</h2><p>${list.length} registrados</p></div></div>
+      <div class="card-list">${list.length? list.map(p=>this.prestamoCard(p)).join('') : this.empty('Sin préstamos todavía. Usa + para registrar el primero.')}</div>
+    `;
+  },
+  prestamoCard(p){
+    const saldo = this.saldoPrestamo(p);
+    const [estado, clase] = this.estadoSello(saldo, p.fechaLimite);
+    return `<div class="item-card">
+      <div class="item-top">
+        <div><div class="item-title">${this.clienteNombre(p.clienteId)}</div>
+        <div class="item-sub">Prestado el ${this.fmtDate(p.fecha)} ${p.tasa?`· Interés ${p.tasa}%`:''}</div>
+        <span class="sello ${clase}">${estado}</span></div>
+        <div class="item-amount">${this.fmtMoney(saldo)}<small>saldo / ${this.fmtMoney(p.monto)}</small></div>
+      </div>
+      ${p.observaciones?`<div class="item-meta">📝 ${p.observaciones}</div>`:''}
+      <div class="item-actions">
+        <button class="btn btn-sm btn-gold" onclick="App.openAbono('prestamo','${p.id}')">➕ Abono</button>
+        <button class="btn btn-sm btn-ghost" onclick="App.openForm('prestamo','${p.id}')">✏️ Editar</button>
+        <button class="btn btn-sm btn-print" onclick="App.imprimirFicha('prestamo','${p.id}')">🖨️ Imprimir</button>
+        <button class="btn btn-sm btn-wa" onclick="App.whatsappFicha('prestamo','${p.id}')">💬 WhatsApp</button>
+      </div>
+    </div>`;
+  },
+
+  /* =========================================================
+     VEHÍCULOS
+     ========================================================= */
+  renderVehiculos(){
+    const list = this.data.vehiculos.slice().reverse();
+    document.getElementById('mainContent').innerHTML = `
+      <div class="section-head"><div><h2>Vehículos</h2><p>${list.length} registrados</p></div></div>
+      <div class="card-list">${list.length? list.map(v=>this.vehiculoCard(v)).join('') : this.empty('Sin vehículos todavía. Usa + para registrar el primero.')}</div>
+    `;
+  },
+  vehiculoCard(v){
+    const saldo = this.saldoVehiculo(v);
+    const [estado, clase] = this.estadoSello(saldo, null);
+    return `<div class="item-card">
+      <div class="item-top">
+        <div><div class="item-title">${v.tipo==='carro'?'🚗':'🏍️'} ${v.marca} ${v.modelo} ${v.placa?'· '+v.placa:''}</div>
+        <div class="item-sub">Comprador: ${this.clienteNombre(v.clienteId)} · ${this.fmtDate(v.fecha)}</div>
+        ${v.socioId?`<div class="item-sub">Financia: ${this.socioNombre(v.socioId)}</div>`:''}
+        <span class="sello ${clase}">${estado}</span></div>
+        <div class="item-amount">${this.fmtMoney(saldo)}<small>saldo / ${this.fmtMoney(v.precio)}</small></div>
+      </div>
+      ${v.observaciones?`<div class="item-meta">📝 ${v.observaciones}</div>`:''}
+      <div class="item-actions">
+        <button class="btn btn-sm btn-gold" onclick="App.openAbono('vehiculo','${v.id}')">➕ Abono</button>
+        <button class="btn btn-sm btn-ghost" onclick="App.openForm('vehiculo','${v.id}')">✏️ Editar</button>
+        <button class="btn btn-sm btn-print" onclick="App.imprimirFicha('vehiculo','${v.id}')">🖨️ Imprimir</button>
+        <button class="btn btn-sm btn-wa" onclick="App.whatsappFicha('vehiculo','${v.id}')">💬 WhatsApp</button>
+      </div>
+    </div>`;
+  },
+
+  /* =========================================================
+     SOCIOS
+     ========================================================= */
+  renderSocios(){
+    const list = this.data.socios;
+    document.getElementById('mainContent').innerHTML = `
+      <div class="section-head"><div><h2>Socios capitalistas</h2><p>${list.length} registrados</p></div></div>
+      <div class="card-list">${list.length? list.map(s=>this.socioCard(s)).join('') : this.empty('Sin socios todavía. Usa + para registrar el primero.')}</div>
+    `;
+  },
+  socioCard(s){
+    const prestamosFin = this.data.prestamos.filter(p=>p.socioId===s.id).length;
+    const vehiculosFin = this.data.vehiculos.filter(v=>v.socioId===s.id).length;
+    return `<div class="item-card">
+      <div class="item-top">
+        <div><div class="item-title">${s.nombre}</div>
+        <div class="item-sub">📞 ${this.maskPhone(s.celular)}</div></div>
+        <div class="item-amount">${this.fmtMoney(s.capital)}<small>capital aportado</small></div>
+      </div>
+      <div class="item-meta">Participa en ${prestamosFin} préstamo(s) y ${vehiculosFin} vehículo(s)</div>
+      <div class="item-actions">
+        <button class="btn btn-sm btn-ghost" onclick="App.openForm('socio','${s.id}')">✏️ Editar</button>
+        <button class="btn btn-sm btn-print" onclick="App.imprimirFicha('socio','${s.id}')">🖨️ Imprimir</button>
+        <button class="btn btn-sm btn-wa" onclick="App.whatsappFicha('socio','${s.id}')">💬 WhatsApp</button>
+      </div>
+    </div>`;
+  },
+
+  /* =========================================================
+     MOVIMIENTOS
+     ========================================================= */
+  renderMovimientos(){
+    const list = this.data.movimientos.slice().reverse();
+    document.getElementById('mainContent').innerHTML = `
+      <div class="section-head"><div><h2>Movimientos</h2><p>Historial completo, sirve de soporte</p></div></div>
+      <div class="card-list">${list.length? this.movimientosHTML(list) : this.empty('Todavía no hay movimientos registrados.')}</div>
+    `;
+  },
+  movimientosHTML(list){
+    return list.map(m=>`<div class="item-card">
+      <div class="item-top">
+        <div><div class="item-title">${m.titulo}</div><div class="item-sub">${this.fmtDate(m.fecha)} · ${m.tipo}</div></div>
+        <div class="item-amount">${this.fmtMoney(m.monto)}</div>
+      </div>
+    </div>`).join('');
+  },
+
+  empty(msg){
+    return `<div class="empty-state"><div class="stamp" style="margin:0 auto 14px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v4m0 4h.01"/><circle cx="12" cy="12" r="10"/></svg></div><p>${msg}</p></div>`;
+  },
+
+  registrarMovimiento(tipo, titulo, monto){
+    this.data.movimientos.push({id:this.uid(), tipo, titulo, monto, fecha:this.todayISO()});
+  },
+
+  /* =========================================================
+     FORMULARIOS (modal)
+     ========================================================= */
+  closeModal(){ document.getElementById('modalOverlay').style.display='none'; },
+
+  openForm(type, id){
+    this.editing = {type, id};
+    const overlay = document.getElementById('modalOverlay');
+    const body = document.getElementById('modalBody');
+    let html = '';
+
+    if(type==='cliente'){
+      const c = id ? this.data.clientes.find(x=>x.id===id) : {nombre:'',direccion:'',celular:'',observaciones:'',formaPago:'Efectivo'};
+      html = `<h3>${id?'Editar':'Nuevo'} cliente</h3>
+        <div class="field"><label>Nombre completo</label><input id="f_nombre" value="${c.nombre||''}"></div>
+        <div class="row2">
+          <div class="field"><label>Celular</label><input id="f_celular" value="${c.celular||''}"></div>
+          <div class="field"><label>Forma de pago</label>
+            <select id="f_formaPago">
+              ${['Efectivo','Transferencia','Consignación','Nequi/Daviplata'].map(o=>`<option ${c.formaPago===o?'selected':''}>${o}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+        <div class="field"><label>Dirección</label><input id="f_direccion" value="${c.direccion||''}"></div>
+        <div class="field"><label>Observaciones</label><textarea id="f_observaciones" rows="2">${c.observaciones||''}</textarea></div>
+        <div class="habeas-note">🔒 Estos datos están protegidos según la Ley 1581 de 2012 (Habeas Data) y solo el administrador puede verlos completos.</div>
+        <div class="modal-actions">
+          ${id?`<button class="btn btn-sm btn-danger" onclick="App.deleteItem('clientes','${id}')">Eliminar</button>`:''}
+          <button class="btn btn-ghost" onclick="App.closeModal()">Cancelar</button>
+          <button class="btn btn-primary" onclick="App.saveCliente('${id||''}')">Guardar</button>
+        </div>`;
+    }
+
+    if(type==='socio'){
+      const s = id ? this.data.socios.find(x=>x.id===id) : {nombre:'',celular:'',capital:0};
+      html = `<h3>${id?'Editar':'Nuevo'} socio</h3>
+        <div class="field"><label>Nombre</label><input id="f_nombre" value="${s.nombre||''}"></div>
+        <div class="row2">
+          <div class="field"><label>Celular</label><input id="f_celular" value="${s.celular||''}"></div>
+          <div class="field"><label>Capital aportado</label><input id="f_capital" type="number" value="${s.capital||0}"></div>
+        </div>
+        <div class="modal-actions">
+          ${id?`<button class="btn btn-sm btn-danger" onclick="App.deleteItem('socios','${id}')">Eliminar</button>`:''}
+          <button class="btn btn-ghost" onclick="App.closeModal()">Cancelar</button>
+          <button class="btn btn-primary" onclick="App.saveSocio('${id||''}')">Guardar</button>
+        </div>`;
+    }
+
+    if(type==='prestamo'){
+      const p = id ? this.data.prestamos.find(x=>x.id===id) : {clienteId:'',monto:0,tasa:0,fecha:this.todayISO(),fechaLimite:'',socioId:'',observaciones:''};
+      html = `<h3>${id?'Editar':'Nuevo'} préstamo</h3>
+        ${this.clientePicker(p.clienteId)}
+        <div class="row2">
+          <div class="field"><label>Monto prestado</label><input id="f_monto" type="number" value="${p.monto||0}" ${id?'readonly style="background:#eee"':''}></div>
+          <div class="field"><label>Interés mensual %</label><input id="f_tasa" type="number" value="${p.tasa||0}"></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label>Fecha del préstamo</label><input id="f_fecha" type="date" value="${p.fecha||this.todayISO()}"></div>
+          <div class="field"><label>Fecha límite de pago</label><input id="f_fechaLimite" type="date" value="${p.fechaLimite||''}"></div>
+        </div>
+        ${this.socioPicker(p.socioId)}
+        <div class="field"><label>Observaciones</label><textarea id="f_observaciones" rows="2">${p.observaciones||''}</textarea></div>
+        <div class="modal-actions">
+          ${id?`<button class="btn btn-sm btn-danger" onclick="App.deleteItem('prestamos','${id}')">Eliminar</button>`:''}
+          <button class="btn btn-ghost" onclick="App.closeModal()">Cancelar</button>
+          <button class="btn btn-primary" onclick="App.savePrestamo('${id||''}')">Guardar</button>
+        </div>`;
+    }
+
+    if(type==='vehiculo'){
+      const v = id ? this.data.vehiculos.find(x=>x.id===id) : {tipo:'carro',marca:'',modelo:'',placa:'',clienteId:'',precio:0,fecha:this.todayISO(),socioId:'',observaciones:''};
+      html = `<h3>${id?'Editar':'Nueva'} venta de vehículo</h3>
+        <div class="row2">
+          <div class="field"><label>Tipo</label><select id="f_tipo"><option value="carro" ${v.tipo==='carro'?'selected':''}>Carro</option><option value="moto" ${v.tipo==='moto'?'selected':''}>Moto</option></select></div>
+          <div class="field"><label>Placa</label><input id="f_placa" value="${v.placa||''}"></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label>Marca</label><input id="f_marca" value="${v.marca||''}"></div>
+          <div class="field"><label>Modelo / año</label><input id="f_modelo" value="${v.modelo||''}"></div>
+        </div>
+        ${this.clientePicker(v.clienteId)}
+        <div class="row2">
+          <div class="field"><label>Precio de venta</label><input id="f_precio" type="number" value="${v.precio||0}" ${id?'readonly style="background:#eee"':''}></div>
+          <div class="field"><label>Fecha de venta</label><input id="f_fecha" type="date" value="${v.fecha||this.todayISO()}"></div>
+        </div>
+        ${this.socioPicker(v.socioId)}
+        <div class="field"><label>Observaciones</label><textarea id="f_observaciones" rows="2">${v.observaciones||''}</textarea></div>
+        <div class="modal-actions">
+          ${id?`<button class="btn btn-sm btn-danger" onclick="App.deleteItem('vehiculos','${id}')">Eliminar</button>`:''}
+          <button class="btn btn-ghost" onclick="App.closeModal()">Cancelar</button>
+          <button class="btn btn-primary" onclick="App.saveVehiculo('${id||''}')">Guardar</button>
+        </div>`;
+    }
+
+    body.innerHTML = html;
+    overlay.style.display='flex';
+  },
+
+  clientePicker(selectedId){
+    if(!this.data.clientes.length){
+      return `<div class="msg msg-err">Primero registra un cliente en la pestaña Clientes.</div>`;
+    }
+    return `<div class="field"><label>Cliente</label><select id="f_clienteId">
+      ${this.data.clientes.map(c=>`<option value="${c.id}" ${selectedId===c.id?'selected':''}>${c.nombre}</option>`).join('')}
+    </select></div>`;
+  },
+  socioPicker(selectedId){
+    if(!this.data.socios.length) return '';
+    return `<div class="field"><label>Socio que financia (opcional)</label><select id="f_socioId">
+      <option value="">— Ninguno / capital propio —</option>
+      ${this.data.socios.map(s=>`<option value="${s.id}" ${selectedId===s.id?'selected':''}>${s.nombre}</option>`).join('')}
+    </select></div>`;
+  },
+
+  v(id){ const el=document.getElementById(id); return el? el.value : ''; },
+
+  async saveCliente(id){
+    const nombre = this.v('f_nombre').trim();
+    if(!nombre){ this.toast('Escribe el nombre del cliente.'); return; }
+    const obj = {nombre, celular:this.v('f_celular').trim(), direccion:this.v('f_direccion').trim(),
+      observaciones:this.v('f_observaciones').trim(), formaPago:this.v('f_formaPago')};
+    if(id){
+      const i = this.data.clientes.findIndex(x=>x.id===id);
+      this.data.clientes[i] = {...this.data.clientes[i], ...obj};
+    } else {
+      obj.id = this.uid();
+      this.data.clientes.push(obj);
+    }
+    await this.save();
+    this.closeModal();
+    this.goTab('clientes');
+    this.toast('Cliente guardado.');
+  },
+
+  async saveSocio(id){
+    const nombre = this.v('f_nombre').trim();
+    if(!nombre){ this.toast('Escribe el nombre del socio.'); return; }
+    const obj = {nombre, celular:this.v('f_celular').trim(), capital:Number(this.v('f_capital'))||0};
+    if(id){
+      const i = this.data.socios.findIndex(x=>x.id===id);
+      this.data.socios[i] = {...this.data.socios[i], ...obj};
+    } else {
+      obj.id = this.uid();
+      this.data.socios.push(obj);
+    }
+    await this.save();
+    this.closeModal();
+    this.goTab('socios');
+    this.toast('Socio guardado.');
+  },
+
+  async savePrestamo(id){
+    if(!this.data.clientes.length){ this.toast('Registra un cliente primero.'); return; }
+    const clienteId = this.v('f_clienteId');
+    const monto = Number(this.v('f_monto'))||0;
+    if(!clienteId || monto<=0){ this.toast('Selecciona el cliente y un monto válido.'); return; }
+    const obj = {clienteId, monto, tasa:Number(this.v('f_tasa'))||0, fecha:this.v('f_fecha'),
+      fechaLimite:this.v('f_fechaLimite'), socioId:this.v('f_socioId')||'', observaciones:this.v('f_observaciones').trim()};
+    if(id){
+      const i = this.data.prestamos.findIndex(x=>x.id===id);
+      this.data.prestamos[i] = {...this.data.prestamos[i], ...obj, monto:this.data.prestamos[i].monto};
+    } else {
+      obj.id = this.uid(); obj.abonos = [];
+      this.data.prestamos.push(obj);
+      this.registrarMovimiento('Préstamo nuevo', `Préstamo a ${this.clienteNombre(clienteId)}`, monto);
+    }
+    await this.save();
+    this.closeModal();
+    this.goTab('prestamos');
+    this.toast('Préstamo guardado.');
+    if(!id) this.whatsappFicha('prestamo', this.data.prestamos[this.data.prestamos.length-1].id);
+  },
+
+  async saveVehiculo(id){
+    if(!this.data.clientes.length){ this.toast('Registra un cliente primero.'); return; }
+    const clienteId = this.v('f_clienteId');
+    const precio = Number(this.v('f_precio'))||0;
+    if(!clienteId || precio<=0){ this.toast('Selecciona el comprador y un precio válido.'); return; }
+    const obj = {tipo:this.v('f_tipo'), marca:this.v('f_marca').trim(), modelo:this.v('f_modelo').trim(),
+      placa:this.v('f_placa').trim().toUpperCase(), clienteId, precio, fecha:this.v('f_fecha'),
+      socioId:this.v('f_socioId')||'', observaciones:this.v('f_observaciones').trim()};
+    if(id){
+      const i = this.data.vehiculos.findIndex(x=>x.id===id);
+      this.data.vehiculos[i] = {...this.data.vehiculos[i], ...obj, precio:this.data.vehiculos[i].precio};
+    } else {
+      obj.id = this.uid(); obj.abonos = [];
+      this.data.vehiculos.push(obj);
+      this.registrarMovimiento('Venta vehículo', `${obj.tipo==='carro'?'Carro':'Moto'} ${obj.marca} a ${this.clienteNombre(clienteId)}`, precio);
+    }
+    await this.save();
+    this.closeModal();
+    this.goTab('vehiculos');
+    this.toast('Vehículo guardado.');
+    if(!id) this.whatsappFicha('vehiculo', this.data.vehiculos[this.data.vehiculos.length-1].id);
+  },
+
+  async deleteItem(coll, id){
+    if(!confirm('¿Eliminar este registro? Esta acción no se puede deshacer.')) return;
+    this.data[coll] = this.data[coll].filter(x=>x.id!==id);
+    await this.save();
+    this.closeModal();
+    this.goTab(this.activeTab);
+    this.toast('Registro eliminado.');
+  },
+
+  /* =========================================================
+     ABONOS
+     ========================================================= */
+  openAbono(type, id){
+    this.editing = {type, id};
+    const coll = type==='prestamo' ? this.data.prestamos : this.data.vehiculos;
+    const item = coll.find(x=>x.id===id);
+    const saldo = type==='prestamo' ? this.saldoPrestamo(item) : this.saldoVehiculo(item);
+    const rows = (item.abonos||[]).map(a=>`<div class="abono-row"><span>${this.fmtDate(a.fecha)}</span><span>${this.fmtMoney(a.monto)}</span></div>`).join('') || '<div class="abono-row"><span>Sin abonos registrados</span></div>';
+    document.getElementById('modalBody').innerHTML = `
+      <h3>Registrar abono</h3>
+      <p class="item-sub">${type==='prestamo'?this.clienteNombre(item.clienteId):item.marca+' '+item.modelo} · Saldo actual: <strong>${this.fmtMoney(saldo)}</strong></p>
+      <div class="field"><label>Monto del abono</label><input id="f_abonoMonto" type="number" max="${saldo}"></div>
+      <div class="field"><label>Fecha</label><input id="f_abonoFecha" type="date" value="${this.todayISO()}"></div>
+      <label style="font-size:.78rem;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);font-weight:600;">Historial</label>
+      <div class="abono-list">${rows}</div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" onclick="App.closeModal()">Cancelar</button>
+        <button class="btn btn-primary" onclick="App.confirmAbono('${type}','${id}')">Guardar abono</button>
+      </div>`;
+    document.getElementById('modalOverlay').style.display='flex';
+  },
+
+  async confirmAbono(type, id){
+    const monto = Number(this.v('f_abonoMonto'))||0;
+    if(monto<=0){ this.toast('Escribe un monto válido.'); return; }
+    const fecha = this.v('f_abonoFecha');
+    const coll = type==='prestamo' ? this.data.prestamos : this.data.vehiculos;
+    const item = coll.find(x=>x.id===id);
+    item.abonos = item.abonos || [];
+    item.abonos.push({fecha, monto});
+    this.registrarMovimiento('Abono', `Abono de ${this.clienteNombre(item.clienteId)}`, monto);
+    await this.save();
+    this.closeModal();
+    this.goTab(this.activeTab==='resumen'?'resumen':(type==='prestamo'?'prestamos':'vehiculos'));
+    this.toast('Abono registrado.');
+    this.whatsappAbono(type, id, monto, fecha);
+  },
+
+  /* =========================================================
+     IMPRESIÓN
+     ========================================================= */
+  buildReceiptHTML(tipo, item){
+    const neg = this.data.info.nombre;
+    if(tipo==='cliente'){
+      return `<h4>${neg}</h4><div class="sub">Ficha de cliente</div><hr>
+        <div class="rline"><span>Nombre</span><span>${item.nombre}</span></div>
+        <div class="rline"><span>Celular</span><span>${item.celular||'—'}</span></div>
+        <div class="rline"><span>Dirección</span><span>${item.direccion||'—'}</span></div>
+        <div class="rline"><span>Forma de pago</span><span>${item.formaPago||'—'}</span></div>
+        ${item.observaciones?`<hr><div class="rline"><span>Obs.</span><span>${item.observaciones}</span></div>`:''}
+        <div class="foot">Generado ${this.fmtDate(this.todayISO())}</div>`;
+    }
+    if(tipo==='prestamo'){
+      const saldo = this.saldoPrestamo(item);
+      return `<h4>${neg}</h4><div class="sub">Comprobante de préstamo</div><hr>
+        <div class="rline"><span>Cliente</span><span>${this.clienteNombre(item.clienteId)}</span></div>
+        <div class="rline"><span>Fecha</span><span>${this.fmtDate(item.fecha)}</span></div>
+        <div class="rline"><span>Monto prestado</span><span>${this.fmtMoney(item.monto)}</span></div>
+        <div class="rline"><span>Interés mensual</span><span>${item.tasa||0}%</span></div>
+        ${item.fechaLimite?`<div class="rline"><span>Fecha límite</span><span>${this.fmtDate(item.fechaLimite)}</span></div>`:''}
+        <hr><div class="rline total"><span>Saldo actual</span><span>${this.fmtMoney(saldo)}</span></div>
+        <div class="foot">Documento de soporte interno — ${neg}</div>`;
+    }
+    if(tipo==='vehiculo'){
+      const saldo = this.saldoVehiculo(item);
+      return `<h4>${neg}</h4><div class="sub">Comprobante de venta de vehículo</div><hr>
+        <div class="rline"><span>Comprador</span><span>${this.clienteNombre(item.clienteId)}</span></div>
+        <div class="rline"><span>Vehículo</span><span>${item.marca} ${item.modelo}</span></div>
+        <div class="rline"><span>Placa</span><span>${item.placa||'—'}</span></div>
+        <div class="rline"><span>Fecha de venta</span><span>${this.fmtDate(item.fecha)}</span></div>
+        <div class="rline"><span>Precio</span><span>${this.fmtMoney(item.precio)}</span></div>
+        <hr><div class="rline total"><span>Saldo actual</span><span>${this.fmtMoney(saldo)}</span></div>
+        <div class="foot">Documento de soporte interno — ${neg}</div>`;
+    }
+    if(tipo==='socio'){
+      return `<h4>${neg}</h4><div class="sub">Ficha de socio</div><hr>
+        <div class="rline"><span>Nombre</span><span>${item.nombre}</span></div>
+        <div class="rline"><span>Celular</span><span>${item.celular||'—'}</span></div>
+        <hr><div class="rline total"><span>Capital aportado</span><span>${this.fmtMoney(item.capital)}</span></div>
+        <div class="foot">Generado ${this.fmtDate(this.todayISO())}</div>`;
+    }
+    return '';
+  },
+
+  imprimirFicha(tipo, id){
+    const colls = {cliente:'clientes', prestamo:'prestamos', vehiculo:'vehiculos', socio:'socios'};
+    const item = this.data[colls[tipo]].find(x=>x.id===id);
+    let area = document.getElementById('printArea');
+    if(!area){ area = document.createElement('div'); area.id='printArea'; area.style.display='none'; document.body.appendChild(area); }
+    area.innerHTML = `<div class="receipt">${this.buildReceiptHTML(tipo, item)}</div>`;
+    area.style.display='block';
+    setTimeout(()=>{ window.print(); area.style.display='none'; }, 80);
+  },
+
+  /* =========================================================
+     WHATSAPP
+     ========================================================= */
+  waLink(phone, text){
+    let p = (phone||'').replace(/\D/g,'');
+    if(p.length===10) p = '57'+p;
+    if(!p) p = (this.data.info.telefonoAdmin||'').replace(/\D/g,'');
+    if(p.length===10) p = '57'+p;
+    return `https://wa.me/${p}?text=${encodeURIComponent(text)}`;
+  },
+
+  whatsappFicha(tipo, id){
+    const colls = {cliente:'clientes', prestamo:'prestamos', vehiculo:'vehiculos', socio:'socios'};
+    const item = this.data[colls[tipo]].find(x=>x.id===id);
+    const neg = this.data.info.nombre;
+    let txt = '', phone = '';
+    if(tipo==='cliente'){
+      txt = `*${neg}*\nFicha de cliente\nNombre: ${item.nombre}\nCelular: ${item.celular||'—'}\nDirección: ${item.direccion||'—'}\nForma de pago: ${item.formaPago||'—'}`;
+      phone = item.celular;
+    }
+    if(tipo==='prestamo'){
+      const cli = this.data.clientes.find(c=>c.id===item.clienteId);
+      txt = `*${neg}*\nComprobante de préstamo\nCliente: ${cli?cli.nombre:''}\nFecha: ${this.fmtDate(item.fecha)}\nMonto: ${this.fmtMoney(item.monto)}\nInterés mensual: ${item.tasa||0}%\nSaldo actual: ${this.fmtMoney(this.saldoPrestamo(item))}`;
+      phone = cli?cli.celular:'';
+    }
+    if(tipo==='vehiculo'){
+      const cli = this.data.clientes.find(c=>c.id===item.clienteId);
+      txt = `*${neg}*\nComprobante de venta\n${item.tipo==='carro'?'Carro':'Moto'}: ${item.marca} ${item.modelo} ${item.placa?'· '+item.placa:''}\nComprador: ${cli?cli.nombre:''}\nPrecio: ${this.fmtMoney(item.precio)}\nSaldo actual: ${this.fmtMoney(this.saldoVehiculo(item))}`;
+      phone = cli?cli.celular:'';
+    }
+    if(tipo==='socio'){
+      txt = `*${neg}*\nFicha de socio\nNombre: ${item.nombre}\nCapital aportado: ${this.fmtMoney(item.capital)}`;
+      phone = item.celular;
+    }
+    window.open(this.waLink(phone, txt), '_blank');
+  },
+
+  whatsappAbono(type, id, monto, fecha){
+    const coll = type==='prestamo' ? this.data.prestamos : this.data.vehiculos;
+    const item = coll.find(x=>x.id===id);
+    const cli = this.data.clientes.find(c=>c.id===item.clienteId);
+    const saldo = type==='prestamo' ? this.saldoPrestamo(item) : this.saldoVehiculo(item);
+    const txt = `*${this.data.info.nombre}*\nComprobante de abono\nCliente: ${cli?cli.nombre:''}\nFecha: ${this.fmtDate(fecha)}\nAbono: ${this.fmtMoney(monto)}\nSaldo restante: ${this.fmtMoney(saldo)}`;
+    window.open(this.waLink(cli?cli.celular:'', txt), '_blank');
+  },
+
+  /* =========================================================
+     ADMIN / BACKUP / RESTORE
+     ========================================================= */
+  toggleAdminMode(){
+    this.adminMode = !this.adminMode;
+    this.goTab(this.activeTab);
+  },
+
+  openAdmin(){
+    document.getElementById('modalBody').innerHTML = `
+      <h3>Administración</h3>
+      <div class="admin-panel">
+        <p class="item-sub">Comparte este token para entrar al mismo negocio desde otro celular o el PC de la oficina. Funciona como una contraseña: cualquiera que lo tenga puede ver y editar esta información.</p>
+        <div class="tok-display">${this.token}</div>
+        <div class="modal-actions" style="justify-content:center">
+          <button class="btn btn-sm btn-ghost" onclick="App.copyToken()">📋 Copiar token</button>
+          <button class="btn btn-sm btn-wa" onclick="App.shareToken()">💬 Enviar por WhatsApp</button>
+        </div>
+        <div class="toggle-row">
+          <span>Modo administrador (ver datos completos)</span>
+          <label class="switch"><input type="checkbox" ${this.adminMode?'checked':''} onchange="App.toggleAdminMode()"><span class="slider"></span></label>
+        </div>
+        <div class="field" style="margin-top:14px"><label>Nombre del negocio</label><input id="f_negNombre" value="${this.data.info.nombre}"></div>
+        <div class="field"><label>Celular del administrador</label><input id="f_negTel" value="${this.data.info.telefonoAdmin}"></div>
+        <div class="modal-actions">
+          <button class="btn btn-ghost" onclick="App.closeModal()">Cerrar</button>
+          <button class="btn btn-primary" onclick="App.saveAdminInfo()">Guardar cambios</button>
+        </div>
+      </div>`;
+    document.getElementById('modalOverlay').style.display='flex';
+  },
+
+  async saveAdminInfo(){
+    this.data.info.nombre = this.v('f_negNombre').trim() || this.data.info.nombre;
+    this.data.info.telefonoAdmin = this.v('f_negTel').trim() || this.data.info.telefonoAdmin;
+    await this.save();
+    document.getElementById('negNombreLbl').textContent = this.data.info.nombre;
+    this.closeModal();
+    this.toast('Datos del negocio actualizados.');
+  },
+
+  copyToken(){
+    navigator.clipboard?.writeText(this.token);
+    this.toast('Token copiado: ' + this.token);
+  },
+
+  shareToken(){
+    const txt = `Código de acceso para *${this.data.info.nombre}* en Libro Mayor:\n\n${this.token}\n\nGuárdalo, lo necesitas para entrar desde cualquier celular o PC.`;
+    window.open(this.waLink(this.data.info.telefonoAdmin, txt), '_blank');
+  },
+
+  backup(){
+    const blob = new Blob([JSON.stringify({token:this.token, ...this.data}, null, 2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `backup-${this.token}-${this.todayISO()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    this.toast('Backup descargado.');
+  },
+
+  restore(ev){
+    const file = ev.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try{
+        const parsed = JSON.parse(reader.result);
+        if(!confirm('Esto reemplazará la información actual del negocio con la del backup. ¿Continuar?')) return;
+        delete parsed.token;
+        this.data = parsed;
+        await this.save();
+        this.boot();
+        this.toast('Backup restaurado correctamente.');
+      }catch(e){
+        this.toast('El archivo no es un backup válido.');
+      }
+    };
+    reader.readAsText(file);
+    ev.target.value = '';
+  }
+};
+
+document.getElementById('modalOverlay').addEventListener('click', (e)=>{
+  if(e.target.id==='modalOverlay') App.closeModal();
+});
+</script>
+</body>
+</html>
