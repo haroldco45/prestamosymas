@@ -14,12 +14,15 @@ Prototipo funcional para el negocio de **préstamos de dinero y compraventa de v
 - **Backup**: descarga toda la información del negocio en un archivo `.json`. Restaurar backup la carga de nuevo.
 - **Panel de administración**: muestra el token, botón para copiarlo o enviarlo por WhatsApp (para sincronizar otro dispositivo), y permite activar el "modo administrador" para ver los datos completos de los clientes.
 
-## Cómo se guardan los datos
+## Cómo se guardan los datos (versión actual)
 
-Esta versión usa el almacenamiento del artefacto de Claude (`window.storage`, modo compartido) en lugar de una base de datos propia. Es ideal para **probar la idea con el cliente rápido**, pero conviene tener claro:
+Esta versión usa `localStorage` del navegador: **los datos quedan guardados solo en el celular o computador donde se crearon**, no se sincronizan solos entre dispositivos todavía.
 
-- El token actúa como contraseña: cualquiera que lo conozca y abra este mismo enlace puede ver y editar los datos del negocio.
-- Es un prototipo de validación, no un sistema de producción. Cuando el cliente confirme que esta es la idea, lo recomendable es migrarlo a una base de datos real (por ejemplo, siguiendo el mismo patrón de `api-vibras`: Node.js/Express + base de datos propia), para tener control total, copias de seguridad automáticas y mejor seguridad.
+- El token (`CAU-XXXXXX`) identifica el negocio, pero por sí solo no mueve la información de un equipo a otro.
+- Para pasar los datos de un dispositivo a otro: en el de origen, usa el botón **Backup** (descarga un `.json`); en el dispositivo de destino, entra con el mismo token (o créalo si no existe) y usa **Restaurar backup** con ese archivo.
+- Si se borra el caché del navegador o se usa "modo incógnito", los datos de ese dispositivo se pierden — por eso conviene sacar backup seguido mientras se prueba la idea con el cliente.
+
+Es la forma más simple de probar el concepto ya mismo. Cuando el cliente confirme que esta es la idea, el siguiente paso es mover el guardado a un backend real (Firebase o un servidor propio tipo `api-vibras`) para que el token sincronice automáticamente entre todos los dispositivos sin tener que mandar backups manuales.
 
 ## Pendiente para siguientes iteraciones
 
