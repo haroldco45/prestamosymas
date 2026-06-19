@@ -1,0 +1,10 @@
+{
+  "name": "Libro Mayor — Cartera & Vehículos",
+  "short_name": "Libro Mayor",
+  "description": "Control de préstamos, ventas de vehículos y socios capitalistas, con sincronización por token.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#15201A",
+  "theme_color": "#15201A",
+  "icons": []
+}
