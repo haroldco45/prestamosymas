@@ -887,6 +887,8 @@ const App = {
 
     body.innerHTML = html;
     overlay.style.display='flex';
+    // Si es formulario de financiación, recalcular al abrir para que los campos muestren valores correctos
+    if(type==='prestamo') setTimeout(()=>App.recalcFinanciacion(), 0);
   },
 
   clientePicker(selectedId){
@@ -928,7 +930,11 @@ const App = {
     const inicial  = Number(this.v('f_cuotaInicial'))||0;
     const aFinanciar = Math.max(0, vehiculo - inicial);
     const elMonto = document.getElementById('f_monto');
-    if(elMonto) elMonto.value = aFinanciar;
+    if(elMonto){
+      elMonto.removeAttribute('readonly'); // temporalmente para poder escribir
+      elMonto.value = aFinanciar;
+      elMonto.setAttribute('readonly','');
+    }
     this.recalcCuota();
   },
 
@@ -1037,9 +1043,10 @@ const App = {
     const clienteId = this.v('f_clienteId');
     const valorVehiculo = Number(this.v('f_valorVehiculo'))||0;
     const cuotaInicial  = Number(this.v('f_cuotaInicial'))||0;
-    const monto = id
-      ? this.data.prestamos.find(x=>x.id===id).monto  // no cambia en edición
-      : Math.max(0, valorVehiculo - cuotaInicial);
+    // Si hay valor de vehículo, el monto a financiar se recalcula siempre (incluso en edición)
+    const monto = valorVehiculo > 0
+      ? Math.max(0, valorVehiculo - cuotaInicial)
+      : Number(document.getElementById('f_monto')?.value)||0;
     if(!clienteId || monto<=0){ this.toast('Selecciona el cliente y verifica los valores del vehículo.'); return; }
     const obj = {clienteId, valorVehiculo, cuotaInicial, monto, tasa:Number(this.v('f_tasa'))||0,
       cuotas:Number(this.v('f_cuotas'))||0, fecha:this.v('f_fecha'),
