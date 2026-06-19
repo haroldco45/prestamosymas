@@ -554,7 +554,9 @@ const App = {
         dineroDisponible = 0;
         diasRetraso = this.diasEntre(row.fechaEsperada, hoy);
         if(diasRetraso > DIAS_GRACIA){
-          mora = Math.round(cuotaPendiente * (0.06/30) * (diasRetraso - DIAS_GRACIA));
+          // 6% sobre la cuota POR DÍA de retraso (después de los 3 días de gracia)
+          const diasEnMora = diasRetraso - DIAS_GRACIA;
+          mora = Math.round(cuotaPendiente * 0.06 * diasEnMora);
           totalMora += mora;
           estado = 'mora';
         } else if(row.fechaEsperada <= hoy){
@@ -834,7 +836,7 @@ const App = {
           <div class="field"><label>Fecha de desembolso</label><input id="f_fecha" type="date" value="${p.fecha||this.todayISO()}"></div>
           <div class="field"><label>Fecha límite (opcional)</label><input id="f_fechaLimite" type="date" value="${p.fechaLimite||''}"></div>
         </div>
-        <div class="habeas-note">💡 El sistema calcula la cuota fija (método francés). Cada abono paga primero la cuota del mes más mora si aplica. Si el cliente se pasa <strong>3 días</strong>, se cobra mora del 6% mensual sobre la cuota.</div>
+        <div class="habeas-note">💡 El sistema calcula la cuota fija (método francés). Si el cliente paga después de <strong>3 días</strong> de la fecha de la cuota, se le cobra el <strong>6% sobre el valor de la cuota por cada día de retraso</strong> a partir del día 4.</div>
         ${this.socioPicker(this.socioIdsDe(p))}
         <div class="field"><label>Observaciones</label><textarea id="f_observaciones" rows="2">${p.observaciones||''}</textarea></div>
         <div class="modal-actions">
@@ -938,7 +940,7 @@ const App = {
         <div class="stat-card"><div class="lbl">Total pagado</div><div class="val" style="font-size:1rem">${this.fmtMoney(totalPagado)}</div></div>
         <div class="stat-card"><div class="lbl">Mora acumulada</div><div class="val" style="font-size:1rem;color:var(--rojo)">${this.fmtMoney(totalMora)}</div></div>
       </div>
-      ${enMora>0?`<div class="habeas-note" style="background:#fdf3f2;color:var(--rojo);margin-bottom:12px">⚠️ ${enMora} cuota(s) en mora. Mora total: <strong>${this.fmtMoney(totalMora)}</strong> (6% mensual sobre la cuota por días de retraso superados los 3 días de gracia).</div>`:''}
+      ${enMora>0?`<div class="habeas-note" style="background:#fdf3f2;color:var(--rojo);margin-bottom:12px">⚠️ ${enMora} cuota(s) en mora. Mora total: <strong>${this.fmtMoney(totalMora)}</strong> (6% sobre la cuota × días de retraso, contando desde el día 4).</div>`:''}
       <div style="overflow-x:auto">
         <table class="tabla-amort">
           <thead><tr>
@@ -1116,13 +1118,26 @@ const App = {
     const item = coll.find(x=>x.id===id);
     item.abonos = item.abonos || [];
 
+    let abonoExtra = {}; // datos adicionales para el comprobante
+
     if(type==='prestamo' && item.cuotas){
-      // Sistema de cuotas: registrar abono simple; el estado se calcula dinámicamente
-      const {totalMora} = this.cuotasStatus(item);
-      const moraCobrada = Math.min(monto, totalMora);
-      const restante = monto - moraCobrada;
-      item.abonos.push({fecha, monto, capital: restante, interes:0, mora: moraCobrada});
-      this.registrarMovimiento('Abono cuota', `Abono de ${this.clienteNombre(item.clienteId)}${moraCobrada>0?' (incl. mora '+this.fmtMoney(moraCobrada)+')':''}`, monto);
+      // Capturamos la cuota que se está pagando ANTES de agregar el abono
+      const {filas, totalMora} = this.cuotasStatus(item);
+      const cuotaActual = filas.find(f=>f.estado==='mora'||f.estado==='activa') || filas.find(f=>f.estado==='pendiente');
+      const numeroCuota = cuotaActual ? cuotaActual.n : '?';
+      const moraCuota = cuotaActual ? (cuotaActual.mora||0) : 0;
+      // Desglose: el abono paga mora primero, luego la cuota (interés + capital)
+      const moraPagada = Math.min(monto, moraCuota);
+      const restanteTrasMora = monto - moraPagada;
+      // Capital e interés de la cuota actual de la tabla
+      const interesTabla = cuotaActual ? cuotaActual.interes : 0;
+      const capitalTabla  = cuotaActual ? cuotaActual.capital : 0;
+      const interesPagado = Math.min(restanteTrasMora, interesTabla);
+      const capitalPagado = Math.min(restanteTrasMora - interesPagado, capitalTabla);
+      abonoExtra = {numeroCuota, capital:capitalPagado, interes:interesPagado, mora:moraPagada};
+      item.abonos.push({fecha, monto, ...abonoExtra});
+      this.registrarMovimiento('Abono cuota', `Abono cuota #${numeroCuota} de ${this.clienteNombre(item.clienteId)}${moraPagada>0?' (incl. mora '+this.fmtMoney(moraPagada)+')':''}`, monto);
+
     } else if(type==='prestamo'){
       const capitalAntes = this.saldoCapital(item);
       const interesAcumuladoHoy = this.interesPendiente(item, fecha);
@@ -1131,8 +1146,10 @@ const App = {
       if(capitalPagado > capitalAntes) capitalPagado = capitalAntes;
       item.interesAcumulado = Math.max(0, interesAcumuladoHoy - interesPagado);
       item.fechaUltimoCorte = fecha;
-      item.abonos.push({fecha, monto, capital:capitalPagado, interes:interesPagado});
+      abonoExtra = {capital:capitalPagado, interes:interesPagado, mora:0};
+      item.abonos.push({fecha, monto, ...abonoExtra});
       this.registrarMovimiento('Abono', `Abono de ${this.clienteNombre(item.clienteId)} (capital ${this.fmtMoney(capitalPagado)} + interés ${this.fmtMoney(interesPagado)})`, monto);
+
     } else {
       item.abonos.push({fecha, monto});
       this.registrarMovimiento('Abono', `Abono de ${this.clienteNombre(item.clienteId)}`, monto);
@@ -1142,7 +1159,7 @@ const App = {
     this.closeModal();
     this.goTab(this.activeTab==='resumen'?'resumen':(type==='prestamo'?'prestamos':'vehiculos'));
     this.toast('Abono registrado.');
-    this.whatsappAbono(type, id, monto, fecha);
+    this.whatsappAbono(type, id, monto, fecha, abonoExtra);
   },
 
   /* =========================================================
@@ -1260,19 +1277,78 @@ const App = {
     window.open(this.waLink(phone, txt), '_blank');
   },
 
-  whatsappAbono(type, id, monto, fecha){
+  saludoColombia(){
+    const hora = new Date(new Date().toLocaleString('en-US',{timeZone:'America/Bogota'})).getHours();
+    if(hora>=5 && hora<12) return 'Buenos días';
+    if(hora>=12 && hora<19) return 'Buenas tardes';
+    return 'Buenas noches';
+  },
+
+  whatsappAbono(type, id, monto, fecha, abonoExtra={}){
     const coll = type==='prestamo' ? this.data.prestamos : this.data.vehiculos;
     const item = coll.find(x=>x.id===id);
     const cli = this.data.clientes.find(c=>c.id===item.clienteId);
+    const neg = this.data.info.nombre;
+    const saludo = this.saludoColombia();
     let txt;
+
     if(type==='prestamo'){
-      const ultimo = (item.abonos||[])[item.abonos.length-1] || {capital:0,interes:0};
-      const capital = this.saldoCapital(item);
-      const interes = this.interesPendiente(item);
-      txt = `*${this.data.info.nombre}*\nComprobante de abono — Financiación\nCliente: ${cli?cli.nombre:''}\nFecha: ${this.fmtDate(fecha)}\nAbono total: ${this.fmtMoney(monto)}\n  → A interés: ${this.fmtMoney(ultimo.interes)}\n  → A capital: ${this.fmtMoney(ultimo.capital)}\nCapital pendiente: ${this.fmtMoney(capital)}\nInterés pendiente: ${this.fmtMoney(interes)}\nTotal pendiente: ${this.fmtMoney(capital+interes)}`;
+      const nuevoSaldo = this.saldoPrestamo(item);
+      const {numeroCuota, capital=0, interes=0, mora=0} = abonoExtra;
+      const nombreMayus = (cli?cli.nombre:'').toUpperCase();
+
+      if(item.cuotas && numeroCuota){
+        // Formato exacto tipo banco con cuotas
+        txt =
+`${saludo}
+Bendiciones
+
+*REPORTE DE PAGO*
+${nombreMayus}
+
+*Cuota #${numeroCuota}* ${this.fmtMoney(item.cuotas? this.calcCuotaFija(item.monto, item.tasa, item.cuotas) : monto)}
+*Fecha Pago* ${this.fmtDate(fecha)}
+*Abono Capital* ${this.fmtMoney(capital)}
+*Intereses* ${this.fmtMoney(interes)}
+*Compensación Moratoria* ${this.fmtMoney(mora)}
+*NUEVO SALDO* ${this.fmtMoney(nuevoSaldo)}
+
+_"¡Muchas gracias por su pago!_
+_Valoramos su compromiso para con nosotros"_`;
+      } else {
+        // Sin cuotas: desglose libre
+        txt =
+`${saludo}
+Bendiciones
+
+*REPORTE DE PAGO*
+${nombreMayus}
+
+*Fecha Pago* ${this.fmtDate(fecha)}
+*Abono Capital* ${this.fmtMoney(capital)}
+*Intereses* ${this.fmtMoney(interes)}
+*NUEVO SALDO* ${this.fmtMoney(nuevoSaldo)}
+
+_"¡Muchas gracias por su pago!_
+_Valoramos su compromiso para con nosotros"_`;
+      }
     } else {
       const saldo = this.saldoVehiculo(item);
-      txt = `*${this.data.info.nombre}*\nComprobante de abono\nCliente: ${cli?cli.nombre:''}\nFecha: ${this.fmtDate(fecha)}\nAbono: ${this.fmtMoney(monto)}\nSaldo restante: ${this.fmtMoney(saldo)}`;
+      const nombreMayus = (cli?cli.nombre:'').toUpperCase();
+      txt =
+`${saludo}
+Bendiciones
+
+*REPORTE DE PAGO*
+${nombreMayus}
+
+*Vehículo* ${item.marca} ${item.modelo}${item.placa?' ('+item.placa+')':''}
+*Fecha Pago* ${this.fmtDate(fecha)}
+*Abono* ${this.fmtMoney(monto)}
+*NUEVO SALDO* ${this.fmtMoney(saldo)}
+
+_"¡Muchas gracias por su pago!_
+_Valoramos su compromiso para con nosotros"_`;
     }
     window.open(this.waLink(cli?cli.celular:'', txt), '_blank');
   },
