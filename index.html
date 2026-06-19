@@ -445,6 +445,14 @@ const App = {
     const s = this.data.socios.find(x=>x.id===id);
     return s ? s.nombre : '—';
   },
+  socioIdsDe(item){
+    if(Array.isArray(item.socioIds)) return item.socioIds;
+    return item.socioId ? [item.socioId] : [];
+  },
+  socioNombres(item){
+    const ids = this.socioIdsDe(item);
+    return ids.map(id=>this.socioNombre(id)).join(', ');
+  },
 
   /* =========================================================
      RESUMEN
@@ -532,6 +540,7 @@ const App = {
       <div class="item-top">
         <div><div class="item-title">${this.clienteNombre(p.clienteId)}</div>
         <div class="item-sub">Prestado el ${this.fmtDate(p.fecha)} ${p.tasa?`· Interés ${p.tasa}%`:''}</div>
+        ${this.socioIdsDe(p).length?`<div class="item-sub">Financian: ${this.socioNombres(p)}</div>`:''}
         <span class="sello ${clase}">${estado}</span></div>
         <div class="item-amount">${this.fmtMoney(saldo)}<small>saldo / ${this.fmtMoney(p.monto)}</small></div>
       </div>
@@ -562,7 +571,7 @@ const App = {
       <div class="item-top">
         <div><div class="item-title">${v.tipo==='carro'?'🚗':'🏍️'} ${v.marca} ${v.modelo} ${v.placa?'· '+v.placa:''}</div>
         <div class="item-sub">Comprador: ${this.clienteNombre(v.clienteId)} · ${this.fmtDate(v.fecha)}</div>
-        ${v.socioId?`<div class="item-sub">Financia: ${this.socioNombre(v.socioId)}</div>`:''}
+        ${this.socioIdsDe(v).length?`<div class="item-sub">Financian: ${this.socioNombres(v)}</div>`:''}
         <span class="sello ${clase}">${estado}</span></div>
         <div class="item-amount">${this.fmtMoney(saldo)}<small>saldo / ${this.fmtMoney(v.precio)}</small></div>
       </div>
@@ -587,8 +596,8 @@ const App = {
     `;
   },
   socioCard(s){
-    const prestamosFin = this.data.prestamos.filter(p=>p.socioId===s.id).length;
-    const vehiculosFin = this.data.vehiculos.filter(v=>v.socioId===s.id).length;
+    const prestamosFin = this.data.prestamos.filter(p=>this.socioIdsDe(p).includes(s.id)).length;
+    const vehiculosFin = this.data.vehiculos.filter(v=>this.socioIdsDe(v).includes(s.id)).length;
     return `<div class="item-card">
       <div class="item-top">
         <div><div class="item-title">${s.nombre}</div>
@@ -680,7 +689,7 @@ const App = {
     }
 
     if(type==='prestamo'){
-      const p = id ? this.data.prestamos.find(x=>x.id===id) : {clienteId:'',monto:0,tasa:0,fecha:this.todayISO(),fechaLimite:'',socioId:'',observaciones:''};
+      const p = id ? this.data.prestamos.find(x=>x.id===id) : {clienteId:'',monto:0,tasa:0,fecha:this.todayISO(),fechaLimite:'',socioIds:[],observaciones:''};
       html = `<h3>${id?'Editar':'Nuevo'} préstamo</h3>
         ${this.clientePicker(p.clienteId)}
         <div class="row2">
@@ -691,7 +700,7 @@ const App = {
           <div class="field"><label>Fecha del préstamo</label><input id="f_fecha" type="date" value="${p.fecha||this.todayISO()}"></div>
           <div class="field"><label>Fecha límite de pago</label><input id="f_fechaLimite" type="date" value="${p.fechaLimite||''}"></div>
         </div>
-        ${this.socioPicker(p.socioId)}
+        ${this.socioPicker(this.socioIdsDe(p))}
         <div class="field"><label>Observaciones</label><textarea id="f_observaciones" rows="2">${p.observaciones||''}</textarea></div>
         <div class="modal-actions">
           ${id?`<button class="btn btn-sm btn-danger" onclick="App.deleteItem('prestamos','${id}')">Eliminar</button>`:''}
@@ -701,7 +710,7 @@ const App = {
     }
 
     if(type==='vehiculo'){
-      const v = id ? this.data.vehiculos.find(x=>x.id===id) : {tipo:'carro',marca:'',modelo:'',placa:'',clienteId:'',precio:0,fecha:this.todayISO(),socioId:'',observaciones:''};
+      const v = id ? this.data.vehiculos.find(x=>x.id===id) : {tipo:'carro',marca:'',modelo:'',placa:'',clienteId:'',precio:0,fecha:this.todayISO(),socioIds:[],observaciones:''};
       html = `<h3>${id?'Editar':'Nueva'} venta de vehículo</h3>
         <div class="row2">
           <div class="field"><label>Tipo</label><select id="f_tipo"><option value="carro" ${v.tipo==='carro'?'selected':''}>Carro</option><option value="moto" ${v.tipo==='moto'?'selected':''}>Moto</option></select></div>
@@ -716,7 +725,7 @@ const App = {
           <div class="field"><label>Precio de venta</label><input id="f_precio" type="number" value="${v.precio||0}" ${id?'readonly style="background:#eee"':''}></div>
           <div class="field"><label>Fecha de venta</label><input id="f_fecha" type="date" value="${v.fecha||this.todayISO()}"></div>
         </div>
-        ${this.socioPicker(v.socioId)}
+        ${this.socioPicker(this.socioIdsDe(v))}
         <div class="field"><label>Observaciones</label><textarea id="f_observaciones" rows="2">${v.observaciones||''}</textarea></div>
         <div class="modal-actions">
           ${id?`<button class="btn btn-sm btn-danger" onclick="App.deleteItem('vehiculos','${id}')">Eliminar</button>`:''}
@@ -737,15 +746,24 @@ const App = {
       ${this.data.clientes.map(c=>`<option value="${c.id}" ${selectedId===c.id?'selected':''}>${c.nombre}</option>`).join('')}
     </select></div>`;
   },
-  socioPicker(selectedId){
+  socioPicker(selectedIds){
     if(!this.data.socios.length) return '';
-    return `<div class="field"><label>Socio que financia (opcional)</label><select id="f_socioId">
-      <option value="">— Ninguno / capital propio —</option>
-      ${this.data.socios.map(s=>`<option value="${s.id}" ${selectedId===s.id?'selected':''}>${s.nombre}</option>`).join('')}
-    </select></div>`;
+    selectedIds = selectedIds || [];
+    return `<div class="field"><label>Socios que financian (opcional, puedes marcar varios)</label>
+      <div class="abono-list" style="max-height:160px">
+      ${this.data.socios.map(s=>`
+        <label style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px dashed var(--line);font-size:.88rem;cursor:pointer;">
+          <input type="checkbox" class="f_socioCheck" value="${s.id}" ${selectedIds.includes(s.id)?'checked':''} style="width:16px;height:16px;">
+          ${s.nombre} <span style="color:var(--ink-soft);font-size:.78rem;">(${this.fmtMoney(s.capital)})</span>
+        </label>`).join('')}
+      </div>
+    </div>`;
   },
 
   v(id){ const el=document.getElementById(id); return el? el.value : ''; },
+  getSelectedSocios(){
+    return Array.from(document.querySelectorAll('.f_socioCheck:checked')).map(el=>el.value);
+  },
 
   async saveCliente(id){
     const nombre = this.v('f_nombre').trim();
@@ -788,7 +806,7 @@ const App = {
     const monto = Number(this.v('f_monto'))||0;
     if(!clienteId || monto<=0){ this.toast('Selecciona el cliente y un monto válido.'); return; }
     const obj = {clienteId, monto, tasa:Number(this.v('f_tasa'))||0, fecha:this.v('f_fecha'),
-      fechaLimite:this.v('f_fechaLimite'), socioId:this.v('f_socioId')||'', observaciones:this.v('f_observaciones').trim()};
+      fechaLimite:this.v('f_fechaLimite'), socioIds:this.getSelectedSocios(), observaciones:this.v('f_observaciones').trim()};
     if(id){
       const i = this.data.prestamos.findIndex(x=>x.id===id);
       this.data.prestamos[i] = {...this.data.prestamos[i], ...obj, monto:this.data.prestamos[i].monto};
@@ -811,7 +829,7 @@ const App = {
     if(!clienteId || precio<=0){ this.toast('Selecciona el comprador y un precio válido.'); return; }
     const obj = {tipo:this.v('f_tipo'), marca:this.v('f_marca').trim(), modelo:this.v('f_modelo').trim(),
       placa:this.v('f_placa').trim().toUpperCase(), clienteId, precio, fecha:this.v('f_fecha'),
-      socioId:this.v('f_socioId')||'', observaciones:this.v('f_observaciones').trim()};
+      socioIds:this.getSelectedSocios(), observaciones:this.v('f_observaciones').trim()};
     if(id){
       const i = this.data.vehiculos.findIndex(x=>x.id===id);
       this.data.vehiculos[i] = {...this.data.vehiculos[i], ...obj, precio:this.data.vehiculos[i].precio};
