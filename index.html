@@ -542,7 +542,6 @@ const App = {
     const hoy = this.todayISO();
     const tabla = this.tablaAmortizacion(p);
     let dineroDisponible = (p.abonos||[]).reduce((a,x)=>a+Number(x.monto||0),0);
-    const DIAS_GRACIA = 3;
     let totalMora = 0;
     const resultado = tabla.map(row=>{
       let estado, diasRetraso=0, mora=0;
@@ -553,13 +552,12 @@ const App = {
         const cuotaPendiente = row.cuota - dineroDisponible;
         dineroDisponible = 0;
         diasRetraso = this.diasEntre(row.fechaEsperada, hoy);
-        if(diasRetraso > DIAS_GRACIA){
-          // 6% sobre la cuota POR DÍA de retraso (después de los 3 días de gracia)
-          const diasEnMora = diasRetraso - DIAS_GRACIA;
-          mora = Math.round(cuotaPendiente * 0.06 * diasEnMora);
+        if(diasRetraso > 0){
+          // Mora = cuota × 6% ÷ 30 × días de retraso (sin días de gracia)
+          mora = Math.round(cuotaPendiente * (0.06 / 30) * diasRetraso);
           totalMora += mora;
           estado = 'mora';
-        } else if(row.fechaEsperada <= hoy){
+        } else if(row.fechaEsperada === hoy){
           estado = 'activa';
         } else {
           estado = 'pendiente';
@@ -836,7 +834,7 @@ const App = {
           <div class="field"><label>Fecha de desembolso</label><input id="f_fecha" type="date" value="${p.fecha||this.todayISO()}"></div>
           <div class="field"><label>Fecha límite (opcional)</label><input id="f_fechaLimite" type="date" value="${p.fechaLimite||''}"></div>
         </div>
-        <div class="habeas-note">💡 El sistema calcula la cuota fija (método francés). Si el cliente paga después de <strong>3 días</strong> de la fecha de la cuota, se le cobra el <strong>6% sobre el valor de la cuota por cada día de retraso</strong> a partir del día 4.</div>
+        <div class="habeas-note">💡 El sistema calcula la cuota fija (método francés). Si el cliente se vence, se cobra mora desde el primer día: <strong>cuota × 6% ÷ 30 × días de retraso</strong>. Ejemplo: vence el 19 y paga el 22 → 3 días de mora.</div>
         ${this.socioPicker(this.socioIdsDe(p))}
         <div class="field"><label>Observaciones</label><textarea id="f_observaciones" rows="2">${p.observaciones||''}</textarea></div>
         <div class="modal-actions">
@@ -940,7 +938,7 @@ const App = {
         <div class="stat-card"><div class="lbl">Total pagado</div><div class="val" style="font-size:1rem">${this.fmtMoney(totalPagado)}</div></div>
         <div class="stat-card"><div class="lbl">Mora acumulada</div><div class="val" style="font-size:1rem;color:var(--rojo)">${this.fmtMoney(totalMora)}</div></div>
       </div>
-      ${enMora>0?`<div class="habeas-note" style="background:#fdf3f2;color:var(--rojo);margin-bottom:12px">⚠️ ${enMora} cuota(s) en mora. Mora total: <strong>${this.fmtMoney(totalMora)}</strong> (6% sobre la cuota × días de retraso, contando desde el día 4).</div>`:''}
+      ${enMora>0?`<div class="habeas-note" style="background:#fdf3f2;color:var(--rojo);margin-bottom:12px">⚠️ ${enMora} cuota(s) en mora. Mora total: <strong>${this.fmtMoney(totalMora)}</strong> (cuota × 6% ÷ 30 × días de retraso, desde el primer día).</div>`:''}
       <div style="overflow-x:auto">
         <table class="tabla-amort">
           <thead><tr>
