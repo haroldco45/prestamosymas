@@ -665,7 +665,7 @@ const App = {
         <span class="sello ${clase}">${estado}</span> ${moraBadge}</div>
         <div class="item-amount">${this.fmtMoney(saldo)}<small>total pendiente hoy</small></div>
       </div>
-      <div class="item-meta">${infoLinea} · Capital inicial: ${this.fmtMoney(p.monto)}</div>
+      <div class="item-meta">${infoLinea} · A financiar: ${this.fmtMoney(p.monto)}${p.valorVehiculo?` · Vehículo: ${this.fmtMoney(p.valorVehiculo)} · Inicial: ${this.fmtMoney(p.cuotaInicial||0)}`:''}  </div>
       ${p.observaciones?`<div class="item-meta">📝 ${p.observaciones}</div>`:''}
       <div class="item-actions">
         <button class="btn btn-sm btn-gold" onclick="App.openAbono('prestamo','${p.id}')">➕ Abono</button>
@@ -816,25 +816,40 @@ const App = {
     }
 
     if(type==='prestamo'){
-      const p = id ? this.data.prestamos.find(x=>x.id===id) : {clienteId:'',monto:0,tasa:6,cuotas:12,fecha:this.todayISO(),fechaLimite:'',socioIds:[],observaciones:''};
+      const p = id ? this.data.prestamos.find(x=>x.id===id) : {clienteId:'',valorVehiculo:0,cuotaInicial:0,monto:0,tasa:6,cuotas:12,fecha:this.todayISO(),fechaLimite:'',socioIds:[],observaciones:''};
       const cuotaFija = p.monto && p.cuotas ? this.calcCuotaFija(p.monto, p.tasa, p.cuotas) : 0;
       html = `<h3>${id?'Editar':'Nueva'} financiación</h3>
         ${this.clientePicker(p.clienteId)}
-        <div class="row2">
-          <div class="field"><label>Capital inicial</label><input id="f_monto" type="number" value="${p.monto||0}" ${id?'readonly style="background:#eee"':''} oninput="App.recalcCuota()"></div>
-          <div class="field"><label>Interés mensual %</label><input id="f_tasa" type="number" step="0.1" value="${p.tasa!==undefined?p.tasa:6}" oninput="App.recalcCuota()"></div>
+        <div style="background:var(--paper2);border:1px solid var(--line);border-radius:4px;padding:14px 14px 6px;margin-bottom:12px">
+          <div style="font-size:.78rem;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft);font-weight:700;margin-bottom:10px">🚗 Datos del vehículo</div>
+          <div class="row2">
+            <div class="field">
+              <label>Valor total del vehículo</label>
+              <input id="f_valorVehiculo" type="number" value="${p.valorVehiculo||0}" oninput="App.recalcFinanciacion()">
+            </div>
+            <div class="field">
+              <label>Cuota inicial (pago único de contado)</label>
+              <input id="f_cuotaInicial" type="number" value="${p.cuotaInicial||0}" oninput="App.recalcFinanciacion()">
+            </div>
+          </div>
+          <div class="field">
+            <label>Valor a financiar (se calcula solo)</label>
+            <input id="f_monto" type="number" value="${p.monto||0}" readonly style="background:#e8f0eb;font-weight:700;color:var(--verde);font-size:1.05rem">
+          </div>
         </div>
         <div class="row2">
-          <div class="field"><label>Número de cuotas pactadas</label><input id="f_cuotas" type="number" min="1" value="${p.cuotas||12}" oninput="App.recalcCuota()"></div>
-          <div class="field"><label>Cuota mensual (calculada)</label>
-            <input id="f_cuotaDisplay" readonly style="background:#e8f0eb;font-weight:700;color:var(--verde)" value="${cuotaFija? this.fmtMoney(cuotaFija):'$0'}">
-          </div>
+          <div class="field"><label>Interés mensual %</label><input id="f_tasa" type="number" step="0.1" value="${p.tasa!==undefined?p.tasa:6}" oninput="App.recalcCuota()"></div>
+          <div class="field"><label>Número de cuotas</label><input id="f_cuotas" type="number" min="1" value="${p.cuotas||12}" oninput="App.recalcCuota()"></div>
+        </div>
+        <div class="field">
+          <label>Cuota mensual (calculada automáticamente)</label>
+          <input id="f_cuotaDisplay" readonly style="background:#e8f0eb;font-weight:700;color:var(--verde);font-size:1.05rem" value="${cuotaFija?this.fmtMoney(cuotaFija):'$0'}">
         </div>
         <div class="row2">
           <div class="field"><label>Fecha de desembolso</label><input id="f_fecha" type="date" value="${p.fecha||this.todayISO()}"></div>
           <div class="field"><label>Fecha límite (opcional)</label><input id="f_fechaLimite" type="date" value="${p.fechaLimite||''}"></div>
         </div>
-        <div class="habeas-note">💡 El sistema calcula la cuota fija (método francés). Si el cliente se vence, se cobra mora desde el primer día: <strong>cuota × 6% ÷ 30 × días de retraso</strong>. Ejemplo: vence el 19 y paga el 22 → 3 días de mora.</div>
+        <div class="habeas-note">💡 Mora desde el primer día de retraso: <strong>cuota × 6% ÷ 30 × días</strong>. Ej: vence el 19, paga el 22 → 3 días de mora.</div>
         ${this.socioPicker(this.socioIdsDe(p))}
         <div class="field"><label>Observaciones</label><textarea id="f_observaciones" rows="2">${p.observaciones||''}</textarea></div>
         <div class="modal-actions">
@@ -843,6 +858,7 @@ const App = {
           <button class="btn btn-primary" onclick="App.savePrestamo('${id||''}')">Guardar</button>
         </div>`;
     }
+
 
     if(type==='vehiculo'){
       const v = id ? this.data.vehiculos.find(x=>x.id===id) : {tipo:'carro',marca:'',modelo:'',placa:'',clienteId:'',precio:0,fecha:this.todayISO(),socioIds:[],observaciones:''};
@@ -906,6 +922,14 @@ const App = {
     const el = document.getElementById('f_cuotaDisplay');
     if(!el) return;
     el.value = cuotas>0 && monto>0 ? this.fmtMoney(this.calcCuotaFija(monto, tasa, cuotas)) : '$0';
+  },
+  recalcFinanciacion(){
+    const vehiculo = Number(this.v('f_valorVehiculo'))||0;
+    const inicial  = Number(this.v('f_cuotaInicial'))||0;
+    const aFinanciar = Math.max(0, vehiculo - inicial);
+    const elMonto = document.getElementById('f_monto');
+    if(elMonto) elMonto.value = aFinanciar;
+    this.recalcCuota();
   },
 
   openTabla(pid){
@@ -1011,9 +1035,14 @@ const App = {
   async savePrestamo(id){
     if(!this.data.clientes.length){ this.toast('Registra un cliente primero.'); return; }
     const clienteId = this.v('f_clienteId');
-    const monto = Number(this.v('f_monto'))||0;
-    if(!clienteId || monto<=0){ this.toast('Selecciona el cliente y un monto válido.'); return; }
-    const obj = {clienteId, monto, tasa:Number(this.v('f_tasa'))||0, cuotas:Number(this.v('f_cuotas'))||0, fecha:this.v('f_fecha'),
+    const valorVehiculo = Number(this.v('f_valorVehiculo'))||0;
+    const cuotaInicial  = Number(this.v('f_cuotaInicial'))||0;
+    const monto = id
+      ? this.data.prestamos.find(x=>x.id===id).monto  // no cambia en edición
+      : Math.max(0, valorVehiculo - cuotaInicial);
+    if(!clienteId || monto<=0){ this.toast('Selecciona el cliente y verifica los valores del vehículo.'); return; }
+    const obj = {clienteId, valorVehiculo, cuotaInicial, monto, tasa:Number(this.v('f_tasa'))||0,
+      cuotas:Number(this.v('f_cuotas'))||0, fecha:this.v('f_fecha'),
       fechaLimite:this.v('f_fechaLimite'), socioIds:this.getSelectedSocios(), observaciones:this.v('f_observaciones').trim()};
     if(id){
       const i = this.data.prestamos.findIndex(x=>x.id===id);
@@ -1186,7 +1215,9 @@ const App = {
       return `<h4>${neg}</h4><div class="sub">Comprobante de financiación</div><hr>
         <div class="rline"><span>Cliente</span><span>${this.clienteNombre(item.clienteId)}</span></div>
         <div class="rline"><span>Fecha</span><span>${this.fmtDate(item.fecha)}</span></div>
-        <div class="rline"><span>Capital inicial</span><span>${this.fmtMoney(item.monto)}</span></div>
+        ${item.valorVehiculo?`<div class="rline"><span>Valor vehículo</span><span>${this.fmtMoney(item.valorVehiculo)}</span></div>
+        <div class="rline"><span>Cuota inicial</span><span>${this.fmtMoney(item.cuotaInicial||0)}</span></div>`:''}
+        <div class="rline"><span>Valor financiado</span><span>${this.fmtMoney(item.monto)}</span></div>
         <div class="rline"><span>Interés mensual</span><span>${item.tasa||0}%</span></div>
         ${item.cuotas?`<div class="rline"><span>Cuotas pactadas</span><span>${item.cuotas} × ${this.fmtMoney(cuotaFija)}</span></div>
         <div class="rline"><span>Cuotas pagadas</span><span>${pagadas} de ${item.cuotas}</span></div>`:`<div class="rline"><span>Interés pendiente</span><span>${this.fmtMoney(interes)}</span></div>`}
