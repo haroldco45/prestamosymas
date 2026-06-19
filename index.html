@@ -4,11 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Libro Mayor — Cartera & Vehículos</title>
-<meta name="description" content="Control de préstamos, ventas de vehículos y socios capitalistas.">
+<meta name="description" content="Control de financiación, ventas de vehículos y socios capitalistas.">
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#15201A">
 <meta property="og:title" content="Libro Mayor — Cartera & Vehículos">
-<meta property="og:description" content="Control de préstamos, ventas de vehículos y socios capitalistas, con sincronización por token.">
+<meta property="og:description" content="Control de financiación, ventas de vehículos y socios capitalistas.">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -190,7 +190,7 @@
   <div class="login-card">
     <div class="stamp"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10h18M7 15h2m4 0h4M5 5h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2z"/></svg></div>
     <h1 class="display">Libro Mayor</h1>
-    <p class="sub">Cartera de préstamos &amp; vehículos</p>
+    <p class="sub">Financiación & vehículos</p>
 
     <div class="field">
       <label for="tokenInput">Código de acceso (token)</label>
@@ -205,7 +205,7 @@
     <div id="createBox">
       <div class="field">
         <label for="negNombre">Nombre del negocio</label>
-        <input id="negNombre" placeholder="Ej: Préstamos &amp; Vehículos Caucasia">
+        <input id="negNombre" placeholder="Ej: Financiación & Vehículos Caucasia">
       </div>
       <div class="field">
         <label for="negTel">Celular del administrador</label>
@@ -393,7 +393,7 @@ const App = {
     const tabs = [
       ['resumen','Resumen'],
       ['clientes','Clientes'],
-      ['prestamos','Préstamos'],
+      ['prestamos','Financiación'],
       ['vehiculos','Vehículos'],
       ['socios','Socios'],
       ['movimientos','Movimientos']
@@ -467,7 +467,7 @@ const App = {
       <div class="section-head"><div><h2>Resumen general</h2><p>${d.info.nombre}</p></div></div>
       <div class="grid-cards">
         <div class="stat-card"><div class="lbl">Clientes</div><div class="val">${d.clientes.length}</div></div>
-        <div class="stat-card"><div class="lbl">Préstamos activos</div><div class="val">${d.prestamos.filter(p=>this.saldoPrestamo(p)>0).length}</div></div>
+        <div class="stat-card"><div class="lbl">Financiaciones activas</div><div class="val">${d.prestamos.filter(p=>this.saldoPrestamo(p)>0).length}</div></div>
         <div class="stat-card"><div class="lbl">Cartera por cobrar</div><div class="val">${this.fmtMoney(saldoPrestamos)}</div></div>
         <div class="stat-card"><div class="lbl">Vehículos en venta</div><div class="val">${d.vehiculos.filter(v=>this.saldoVehiculo(v)>0).length}</div></div>
         <div class="stat-card"><div class="lbl">Saldo vehículos</div><div class="val">${this.fmtMoney(saldoVehiculos)}</div></div>
@@ -479,11 +479,27 @@ const App = {
   },
 
   /* =========================================================
-     SALDOS
+     SALDOS Y AMORTIZACIÓN (financiación a interés sobre saldos)
      ========================================================= */
+  diasEntre(f1, f2){
+    if(!f1 || !f2) return 0;
+    const d = Math.floor((new Date(f2) - new Date(f1)) / 86400000);
+    return Math.max(0, d);
+  },
+  saldoCapital(p){
+    const abonadoCapital = (p.abonos||[]).reduce((a,x)=> a + Number(x.capital!==undefined ? x.capital : x.monto || 0), 0);
+    return Math.max(0, Number(p.monto) - abonadoCapital);
+  },
+  interesPendiente(p, hastaFecha){
+    hastaFecha = hastaFecha || this.todayISO();
+    const fechaCorte = p.fechaUltimoCorte || p.fecha;
+    const dias = this.diasEntre(fechaCorte, hastaFecha);
+    const interesNuevo = this.saldoCapital(p) * ((Number(p.tasa)||0)/100) * (dias/30);
+    return Math.max(0, (Number(p.interesAcumulado)||0) + interesNuevo);
+  },
   saldoPrestamo(p){
-    const abonado = (p.abonos||[]).reduce((a,x)=>a+Number(x.monto),0);
-    return Math.max(0, Number(p.monto) - abonado);
+    // Saldo total a pagar hoy: capital pendiente + interés acumulado pendiente.
+    return this.saldoCapital(p) + this.interesPendiente(p);
   },
   saldoVehiculo(v){
     const abonado = (v.abonos||[]).reduce((a,x)=>a+Number(x.monto),0);
@@ -511,7 +527,8 @@ const App = {
     return `<div class="item-card">
       <div class="item-top">
         <div><div class="item-title">${c.nombre}</div>
-        <div class="item-sub">📞 ${this.maskPhone(c.celular)} · 📍 ${this.maskAddr(c.direccion)}</div></div>
+        <div class="item-sub">📞 ${this.maskPhone(c.celular)} · 🪪 ${this.maskPhone(c.cedula)} · 📍 ${this.maskAddr(c.direccion)}</div>
+        ${c.email?`<div class="item-sub">✉️ ${this.adminMode? c.email : '••••••@'+(c.email.split('@')[1]||'')}</div>`:''}</div>
       </div>
       ${c.observaciones?`<div class="item-meta">📝 ${c.observaciones}</div>`:''}
       <div class="item-meta">Forma de pago: <strong>${c.formaPago||'—'}</strong></div>
@@ -529,21 +546,24 @@ const App = {
   renderPrestamos(){
     const list = this.data.prestamos.slice().reverse();
     document.getElementById('mainContent').innerHTML = `
-      <div class="section-head"><div><h2>Préstamos</h2><p>${list.length} registrados</p></div></div>
-      <div class="card-list">${list.length? list.map(p=>this.prestamoCard(p)).join('') : this.empty('Sin préstamos todavía. Usa + para registrar el primero.')}</div>
+      <div class="section-head"><div><h2>Financiación</h2><p>${list.length} registradas</p></div></div>
+      <div class="card-list">${list.length? list.map(p=>this.prestamoCard(p)).join('') : this.empty('Sin financiaciones todavía. Usa + para registrar la primera.')}</div>
     `;
   },
   prestamoCard(p){
-    const saldo = this.saldoPrestamo(p);
+    const capital = this.saldoCapital(p);
+    const interes = this.interesPendiente(p);
+    const saldo = capital + interes;
     const [estado, clase] = this.estadoSello(saldo, p.fechaLimite);
     return `<div class="item-card">
       <div class="item-top">
         <div><div class="item-title">${this.clienteNombre(p.clienteId)}</div>
-        <div class="item-sub">Prestado el ${this.fmtDate(p.fecha)} ${p.tasa?`· Interés ${p.tasa}%`:''}</div>
+        <div class="item-sub">Desembolsado el ${this.fmtDate(p.fecha)} · Interés ${p.tasa||0}% mensual</div>
         ${this.socioIdsDe(p).length?`<div class="item-sub">Financian: ${this.socioNombres(p)}</div>`:''}
         <span class="sello ${clase}">${estado}</span></div>
-        <div class="item-amount">${this.fmtMoney(saldo)}<small>saldo / ${this.fmtMoney(p.monto)}</small></div>
+        <div class="item-amount">${this.fmtMoney(saldo)}<small>total a pagar hoy</small></div>
       </div>
+      <div class="item-meta">Capital pendiente: <strong>${this.fmtMoney(capital)}</strong> · Interés pendiente: <strong>${this.fmtMoney(interes)}</strong> · Capital inicial: ${this.fmtMoney(p.monto)}</div>
       ${p.observaciones?`<div class="item-meta">📝 ${p.observaciones}</div>`:''}
       <div class="item-actions">
         <button class="btn btn-sm btn-gold" onclick="App.openAbono('prestamo','${p.id}')">➕ Abono</button>
@@ -604,7 +624,7 @@ const App = {
         <div class="item-sub">📞 ${this.maskPhone(s.celular)}</div></div>
         <div class="item-amount">${this.fmtMoney(s.capital)}<small>capital aportado</small></div>
       </div>
-      <div class="item-meta">Participa en ${prestamosFin} préstamo(s) y ${vehiculosFin} vehículo(s)</div>
+      <div class="item-meta">Participa en ${prestamosFin} financiación(es) y ${vehiculosFin} vehículo(s)</div>
       <div class="item-actions">
         <button class="btn btn-sm btn-ghost" onclick="App.openForm('socio','${s.id}')">✏️ Editar</button>
         <button class="btn btn-sm btn-print" onclick="App.imprimirFicha('socio','${s.id}')">🖨️ Imprimir</button>
@@ -652,11 +672,15 @@ const App = {
     let html = '';
 
     if(type==='cliente'){
-      const c = id ? this.data.clientes.find(x=>x.id===id) : {nombre:'',direccion:'',celular:'',observaciones:'',formaPago:'Efectivo'};
+      const c = id ? this.data.clientes.find(x=>x.id===id) : {nombre:'',cedula:'',direccion:'',celular:'',email:'',observaciones:'',formaPago:'Efectivo'};
       html = `<h3>${id?'Editar':'Nuevo'} cliente</h3>
         <div class="field"><label>Nombre completo</label><input id="f_nombre" value="${c.nombre||''}"></div>
         <div class="row2">
+          <div class="field"><label>Cédula</label><input id="f_cedula" value="${c.cedula||''}"></div>
           <div class="field"><label>Celular</label><input id="f_celular" value="${c.celular||''}"></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label>Correo electrónico</label><input id="f_email" type="email" value="${c.email||''}"></div>
           <div class="field"><label>Forma de pago</label>
             <select id="f_formaPago">
               ${['Efectivo','Transferencia','Consignación','Nequi/Daviplata'].map(o=>`<option ${c.formaPago===o?'selected':''}>${o}</option>`).join('')}
@@ -689,17 +713,18 @@ const App = {
     }
 
     if(type==='prestamo'){
-      const p = id ? this.data.prestamos.find(x=>x.id===id) : {clienteId:'',monto:0,tasa:0,fecha:this.todayISO(),fechaLimite:'',socioIds:[],observaciones:''};
-      html = `<h3>${id?'Editar':'Nuevo'} préstamo</h3>
+      const p = id ? this.data.prestamos.find(x=>x.id===id) : {clienteId:'',monto:0,tasa:6,fecha:this.todayISO(),fechaLimite:'',socioIds:[],observaciones:''};
+      html = `<h3>${id?'Editar':'Nueva'} financiación</h3>
         ${this.clientePicker(p.clienteId)}
         <div class="row2">
-          <div class="field"><label>Monto prestado</label><input id="f_monto" type="number" value="${p.monto||0}" ${id?'readonly style="background:#eee"':''}></div>
-          <div class="field"><label>Interés mensual %</label><input id="f_tasa" type="number" value="${p.tasa||0}"></div>
+          <div class="field"><label>Capital inicial</label><input id="f_monto" type="number" value="${p.monto||0}" ${id?'readonly style="background:#eee"':''}></div>
+          <div class="field"><label>Interés mensual %</label><input id="f_tasa" type="number" step="0.1" value="${p.tasa!==undefined?p.tasa:6}"></div>
         </div>
         <div class="row2">
-          <div class="field"><label>Fecha del préstamo</label><input id="f_fecha" type="date" value="${p.fecha||this.todayISO()}"></div>
+          <div class="field"><label>Fecha de desembolso</label><input id="f_fecha" type="date" value="${p.fecha||this.todayISO()}"></div>
           <div class="field"><label>Fecha límite de pago</label><input id="f_fechaLimite" type="date" value="${p.fechaLimite||''}"></div>
         </div>
+        ${id?`<div class="habeas-note">💡 El interés se calcula automáticamente sobre el saldo de capital, como en un banco: cada abono primero paga el interés acumulado y el resto abona a capital.</div>`:''}
         ${this.socioPicker(this.socioIdsDe(p))}
         <div class="field"><label>Observaciones</label><textarea id="f_observaciones" rows="2">${p.observaciones||''}</textarea></div>
         <div class="modal-actions">
@@ -768,8 +793,8 @@ const App = {
   async saveCliente(id){
     const nombre = this.v('f_nombre').trim();
     if(!nombre){ this.toast('Escribe el nombre del cliente.'); return; }
-    const obj = {nombre, celular:this.v('f_celular').trim(), direccion:this.v('f_direccion').trim(),
-      observaciones:this.v('f_observaciones').trim(), formaPago:this.v('f_formaPago')};
+    const obj = {nombre, cedula:this.v('f_cedula').trim(), celular:this.v('f_celular').trim(), email:this.v('f_email').trim(),
+      direccion:this.v('f_direccion').trim(), observaciones:this.v('f_observaciones').trim(), formaPago:this.v('f_formaPago')};
     if(id){
       const i = this.data.clientes.findIndex(x=>x.id===id);
       this.data.clientes[i] = {...this.data.clientes[i], ...obj};
@@ -811,14 +836,14 @@ const App = {
       const i = this.data.prestamos.findIndex(x=>x.id===id);
       this.data.prestamos[i] = {...this.data.prestamos[i], ...obj, monto:this.data.prestamos[i].monto};
     } else {
-      obj.id = this.uid(); obj.abonos = [];
+      obj.id = this.uid(); obj.abonos = []; obj.interesAcumulado = 0; obj.fechaUltimoCorte = obj.fecha;
       this.data.prestamos.push(obj);
-      this.registrarMovimiento('Préstamo nuevo', `Préstamo a ${this.clienteNombre(clienteId)}`, monto);
+      this.registrarMovimiento('Financiación nueva', `Financiación a ${this.clienteNombre(clienteId)}`, monto);
     }
     await this.save();
     this.closeModal();
     this.goTab('prestamos');
-    this.toast('Préstamo guardado.');
+    this.toast('Financiación guardada.');
     if(!id) this.whatsappFicha('prestamo', this.data.prestamos[this.data.prestamos.length-1].id);
   },
 
@@ -861,14 +886,28 @@ const App = {
     this.editing = {type, id};
     const coll = type==='prestamo' ? this.data.prestamos : this.data.vehiculos;
     const item = coll.find(x=>x.id===id);
-    const saldo = type==='prestamo' ? this.saldoPrestamo(item) : this.saldoVehiculo(item);
-    const rows = (item.abonos||[]).map(a=>`<div class="abono-row"><span>${this.fmtDate(a.fecha)}</span><span>${this.fmtMoney(a.monto)}</span></div>`).join('') || '<div class="abono-row"><span>Sin abonos registrados</span></div>';
+    let saldoInfo = '';
+    if(type==='prestamo'){
+      const capital = this.saldoCapital(item);
+      const interes = this.interesPendiente(item);
+      saldoInfo = `Capital pendiente: <strong>${this.fmtMoney(capital)}</strong> · Interés pendiente: <strong>${this.fmtMoney(interes)}</strong> · Total hoy: <strong>${this.fmtMoney(capital+interes)}</strong>`;
+    } else {
+      saldoInfo = `Saldo actual: <strong>${this.fmtMoney(this.saldoVehiculo(item))}</strong>`;
+    }
+    const rows = (item.abonos||[]).map(a=>{
+      if(type==='prestamo' && a.capital!==undefined){
+        return `<div class="abono-row"><span>${this.fmtDate(a.fecha)}</span><span>${this.fmtMoney(a.monto)} <small style="color:var(--ink-soft)">(cap. ${this.fmtMoney(a.capital)} + int. ${this.fmtMoney(a.interes)})</small></span></div>`;
+      }
+      return `<div class="abono-row"><span>${this.fmtDate(a.fecha)}</span><span>${this.fmtMoney(a.monto)}</span></div>`;
+    }).join('') || '<div class="abono-row"><span>Sin abonos registrados</span></div>';
     document.getElementById('modalBody').innerHTML = `
       <h3>Registrar abono</h3>
-      <p class="item-sub">${type==='prestamo'?this.clienteNombre(item.clienteId):item.marca+' '+item.modelo} · Saldo actual: <strong>${this.fmtMoney(saldo)}</strong></p>
-      <div class="field"><label>Monto del abono</label><input id="f_abonoMonto" type="number" max="${saldo}"></div>
+      <p class="item-sub">${type==='prestamo'?this.clienteNombre(item.clienteId):item.marca+' '+item.modelo}</p>
+      <p class="item-sub">${saldoInfo}</p>
+      <div class="field"><label>Monto del abono</label><input id="f_abonoMonto" type="number"></div>
       <div class="field"><label>Fecha</label><input id="f_abonoFecha" type="date" value="${this.todayISO()}"></div>
-      <label style="font-size:.78rem;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);font-weight:600;">Historial</label>
+      ${type==='prestamo'?'<div class="habeas-note">El abono se aplica primero al interés acumulado y lo que sobra abona a capital, igual que en un banco.</div>':''}
+      <label style="font-size:.78rem;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);font-weight:600;display:block;margin-top:10px;">Historial</label>
       <div class="abono-list">${rows}</div>
       <div class="modal-actions">
         <button class="btn btn-ghost" onclick="App.closeModal()">Cancelar</button>
@@ -884,8 +923,22 @@ const App = {
     const coll = type==='prestamo' ? this.data.prestamos : this.data.vehiculos;
     const item = coll.find(x=>x.id===id);
     item.abonos = item.abonos || [];
-    item.abonos.push({fecha, monto});
-    this.registrarMovimiento('Abono', `Abono de ${this.clienteNombre(item.clienteId)}`, monto);
+
+    if(type==='prestamo'){
+      const capitalAntes = this.saldoCapital(item);
+      const interesAcumuladoHoy = this.interesPendiente(item, fecha);
+      const interesPagado = Math.min(monto, interesAcumuladoHoy);
+      let capitalPagado = Math.max(0, monto - interesPagado);
+      if(capitalPagado > capitalAntes) capitalPagado = capitalAntes;
+      item.interesAcumulado = Math.max(0, interesAcumuladoHoy - interesPagado);
+      item.fechaUltimoCorte = fecha;
+      item.abonos.push({fecha, monto, capital:capitalPagado, interes:interesPagado});
+      this.registrarMovimiento('Abono', `Abono de ${this.clienteNombre(item.clienteId)} (capital ${this.fmtMoney(capitalPagado)} + interés ${this.fmtMoney(interesPagado)})`, monto);
+    } else {
+      item.abonos.push({fecha, monto});
+      this.registrarMovimiento('Abono', `Abono de ${this.clienteNombre(item.clienteId)}`, monto);
+    }
+
     await this.save();
     this.closeModal();
     this.goTab(this.activeTab==='resumen'?'resumen':(type==='prestamo'?'prestamos':'vehiculos'));
@@ -901,21 +954,27 @@ const App = {
     if(tipo==='cliente'){
       return `<h4>${neg}</h4><div class="sub">Ficha de cliente</div><hr>
         <div class="rline"><span>Nombre</span><span>${item.nombre}</span></div>
+        <div class="rline"><span>Cédula</span><span>${item.cedula||'—'}</span></div>
         <div class="rline"><span>Celular</span><span>${item.celular||'—'}</span></div>
+        <div class="rline"><span>Correo</span><span>${item.email||'—'}</span></div>
         <div class="rline"><span>Dirección</span><span>${item.direccion||'—'}</span></div>
         <div class="rline"><span>Forma de pago</span><span>${item.formaPago||'—'}</span></div>
         ${item.observaciones?`<hr><div class="rline"><span>Obs.</span><span>${item.observaciones}</span></div>`:''}
         <div class="foot">Generado ${this.fmtDate(this.todayISO())}</div>`;
     }
     if(tipo==='prestamo'){
-      const saldo = this.saldoPrestamo(item);
-      return `<h4>${neg}</h4><div class="sub">Comprobante de préstamo</div><hr>
+      const capital = this.saldoCapital(item);
+      const interes = this.interesPendiente(item);
+      return `<h4>${neg}</h4><div class="sub">Comprobante de financiación</div><hr>
         <div class="rline"><span>Cliente</span><span>${this.clienteNombre(item.clienteId)}</span></div>
         <div class="rline"><span>Fecha</span><span>${this.fmtDate(item.fecha)}</span></div>
-        <div class="rline"><span>Monto prestado</span><span>${this.fmtMoney(item.monto)}</span></div>
+        <div class="rline"><span>Capital inicial</span><span>${this.fmtMoney(item.monto)}</span></div>
         <div class="rline"><span>Interés mensual</span><span>${item.tasa||0}%</span></div>
         ${item.fechaLimite?`<div class="rline"><span>Fecha límite</span><span>${this.fmtDate(item.fechaLimite)}</span></div>`:''}
-        <hr><div class="rline total"><span>Saldo actual</span><span>${this.fmtMoney(saldo)}</span></div>
+        <hr>
+        <div class="rline"><span>Capital pendiente</span><span>${this.fmtMoney(capital)}</span></div>
+        <div class="rline"><span>Interés pendiente</span><span>${this.fmtMoney(interes)}</span></div>
+        <div class="rline total"><span>Total a pagar hoy</span><span>${this.fmtMoney(capital+interes)}</span></div>
         <div class="foot">Documento de soporte interno — ${neg}</div>`;
     }
     if(tipo==='vehiculo'){
@@ -966,12 +1025,14 @@ const App = {
     const neg = this.data.info.nombre;
     let txt = '', phone = '';
     if(tipo==='cliente'){
-      txt = `*${neg}*\nFicha de cliente\nNombre: ${item.nombre}\nCelular: ${item.celular||'—'}\nDirección: ${item.direccion||'—'}\nForma de pago: ${item.formaPago||'—'}`;
+      txt = `*${neg}*\nFicha de cliente\nNombre: ${item.nombre}\nCédula: ${item.cedula||'—'}\nCelular: ${item.celular||'—'}\nCorreo: ${item.email||'—'}\nDirección: ${item.direccion||'—'}\nForma de pago: ${item.formaPago||'—'}`;
       phone = item.celular;
     }
     if(tipo==='prestamo'){
       const cli = this.data.clientes.find(c=>c.id===item.clienteId);
-      txt = `*${neg}*\nComprobante de préstamo\nCliente: ${cli?cli.nombre:''}\nFecha: ${this.fmtDate(item.fecha)}\nMonto: ${this.fmtMoney(item.monto)}\nInterés mensual: ${item.tasa||0}%\nSaldo actual: ${this.fmtMoney(this.saldoPrestamo(item))}`;
+      const capital = this.saldoCapital(item);
+      const interes = this.interesPendiente(item);
+      txt = `*${neg}*\nComprobante de financiación\nCliente: ${cli?cli.nombre:''}\nFecha: ${this.fmtDate(item.fecha)}\nCapital inicial: ${this.fmtMoney(item.monto)}\nInterés mensual: ${item.tasa||0}%\nCapital pendiente: ${this.fmtMoney(capital)}\nInterés pendiente: ${this.fmtMoney(interes)}\nTotal a pagar hoy: ${this.fmtMoney(capital+interes)}`;
       phone = cli?cli.celular:'';
     }
     if(tipo==='vehiculo'){
@@ -990,8 +1051,16 @@ const App = {
     const coll = type==='prestamo' ? this.data.prestamos : this.data.vehiculos;
     const item = coll.find(x=>x.id===id);
     const cli = this.data.clientes.find(c=>c.id===item.clienteId);
-    const saldo = type==='prestamo' ? this.saldoPrestamo(item) : this.saldoVehiculo(item);
-    const txt = `*${this.data.info.nombre}*\nComprobante de abono\nCliente: ${cli?cli.nombre:''}\nFecha: ${this.fmtDate(fecha)}\nAbono: ${this.fmtMoney(monto)}\nSaldo restante: ${this.fmtMoney(saldo)}`;
+    let txt;
+    if(type==='prestamo'){
+      const ultimo = (item.abonos||[])[item.abonos.length-1] || {capital:0,interes:0};
+      const capital = this.saldoCapital(item);
+      const interes = this.interesPendiente(item);
+      txt = `*${this.data.info.nombre}*\nComprobante de abono — Financiación\nCliente: ${cli?cli.nombre:''}\nFecha: ${this.fmtDate(fecha)}\nAbono total: ${this.fmtMoney(monto)}\n  → A interés: ${this.fmtMoney(ultimo.interes)}\n  → A capital: ${this.fmtMoney(ultimo.capital)}\nCapital pendiente: ${this.fmtMoney(capital)}\nInterés pendiente: ${this.fmtMoney(interes)}\nTotal pendiente: ${this.fmtMoney(capital+interes)}`;
+    } else {
+      const saldo = this.saldoVehiculo(item);
+      txt = `*${this.data.info.nombre}*\nComprobante de abono\nCliente: ${cli?cli.nombre:''}\nFecha: ${this.fmtDate(fecha)}\nAbono: ${this.fmtMoney(monto)}\nSaldo restante: ${this.fmtMoney(saldo)}`;
+    }
     window.open(this.waLink(cli?cli.celular:'', txt), '_blank');
   },
 
