@@ -130,10 +130,29 @@
   .fab{position:fixed;bottom:24px;right:24px;background:var(--gold);color:#2b1c08;border:none;border-radius:50%;
     width:58px;height:58px;font-size:1.8rem;box-shadow:var(--shadow);z-index:25;}
 
+  /* ===== TABLA AMORTIZACIÓN ===== */
+  .modal.modal-wide{max-width:780px;}
+  .tabla-amort{width:100%;border-collapse:collapse;font-size:.8rem;margin-top:10px;}
+  .tabla-amort th{background:var(--bg-deep);color:var(--paper);padding:7px 10px;text-align:right;font-weight:600;font-size:.72rem;letter-spacing:.04em;white-space:nowrap;}
+  .tabla-amort th:first-child{text-align:center;}
+  .tabla-amort td{padding:6px 10px;text-align:right;border-bottom:1px solid var(--line);font-family:'IBM Plex Mono',monospace;font-size:.78rem;}
+  .tabla-amort td:first-child{text-align:center;font-family:'Inter';}
+  .tabla-amort tr:hover td{background:var(--paper2);}
+  .tr-pagado td{color:var(--ink-soft);}
+  .tr-mora td{background:#fdf3f2;}
+  .tr-mora td:first-child{color:var(--rojo);font-weight:700;}
+  .tr-pendiente td:first-child{color:var(--gold-dark);font-weight:600;}
+  .tr-activa td{background:#f0f6f2;font-weight:600;}
+  .badge-mora{display:inline-block;background:var(--rojo);color:#fff;border-radius:3px;padding:1px 6px;font-size:.66rem;font-weight:700;letter-spacing:.04em;margin-left:4px;}
+  .badge-ok{display:inline-block;background:var(--verde);color:#fff;border-radius:3px;padding:1px 6px;font-size:.66rem;font-weight:700;}
+  .resumen-tabla{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:14px;}
+  .resumen-tabla .stat-card{padding:12px;}
+
   /* ===== MODAL ===== */
   .modal-overlay{display:none;position:fixed;inset:0;background:rgba(21,32,26,.55);z-index:50;align-items:flex-start;
     justify-content:center;padding:24px 16px;overflow-y:auto;}
   .modal{background:var(--paper);width:100%;max-width:520px;border-radius:5px;padding:26px 24px;margin:auto 0;box-shadow:var(--shadow);}
+  .modal.modal-wide{max-width:860px;}
   .modal h3{font-family:'Fraunces',serif;margin:0 0 16px;font-size:1.25rem;}
   .modal-actions{display:flex;gap:10px;margin-top:18px;justify-content:flex-end;flex-wrap:wrap;}
   .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
@@ -486,11 +505,78 @@ const App = {
     const d = Math.floor((new Date(f2) - new Date(f1)) / 86400000);
     return Math.max(0, d);
   },
+  addMonths(dateStr, months){
+    const d = new Date(dateStr + 'T00:00:00');
+    d.setMonth(d.getMonth() + months);
+    return d.toISOString().slice(0,10);
+  },
+  calcCuotaFija(monto, tasa, cuotas){
+    if(!cuotas || cuotas<=0) return 0;
+    const i = tasa / 100;
+    if(i===0) return Math.round(monto / cuotas);
+    return Math.round(monto * (i * Math.pow(1+i, cuotas)) / (Math.pow(1+i, cuotas) - 1));
+  },
+  tablaAmortizacion(p){
+    const cuotas = Number(p.cuotas)||0;
+    if(!cuotas) return [];
+    const monto = Number(p.monto);
+    const i = (Number(p.tasa)||0) / 100;
+    const cuotaFija = this.calcCuotaFija(monto, i*100, cuotas);
+    let saldo = monto;
+    const rows = [];
+    for(let k=1; k<=cuotas; k++){
+      const interes = Math.round(saldo * i);
+      const capital = Math.min(Math.round(cuotaFija - interes), saldo);
+      saldo = Math.max(0, saldo - capital);
+      rows.push({n:k, fechaEsperada:this.addMonths(p.fecha, k), cuota:cuotaFija, interes, capital, saldoFinal:saldo});
+    }
+    if(rows.length && rows[rows.length-1].saldoFinal!==0){
+      rows[rows.length-1].capital += rows[rows.length-1].saldoFinal;
+      rows[rows.length-1].cuota   += rows[rows.length-1].saldoFinal;
+      rows[rows.length-1].saldoFinal = 0;
+    }
+    return rows;
+  },
+  cuotasStatus(p){
+    // Determina para cada cuota: pagado, pendiente, mora, activa
+    const hoy = this.todayISO();
+    const tabla = this.tablaAmortizacion(p);
+    let dineroDisponible = (p.abonos||[]).reduce((a,x)=>a+Number(x.monto||0),0);
+    const DIAS_GRACIA = 3;
+    let totalMora = 0;
+    const resultado = tabla.map(row=>{
+      let estado, diasRetraso=0, mora=0;
+      if(dineroDisponible >= row.cuota){
+        dineroDisponible -= row.cuota;
+        estado = 'pagado';
+      } else {
+        const cuotaPendiente = row.cuota - dineroDisponible;
+        dineroDisponible = 0;
+        diasRetraso = this.diasEntre(row.fechaEsperada, hoy);
+        if(diasRetraso > DIAS_GRACIA){
+          mora = Math.round(cuotaPendiente * (0.06/30) * (diasRetraso - DIAS_GRACIA));
+          totalMora += mora;
+          estado = 'mora';
+        } else if(row.fechaEsperada <= hoy){
+          estado = 'activa';
+        } else {
+          estado = 'pendiente';
+        }
+      }
+      return {...row, estado, diasRetraso, mora};
+    });
+    return {filas:resultado, totalMora, dineroDisponible};
+  },
+  moraTotal(p){
+    if(!p.cuotas) return 0;
+    return this.cuotasStatus(p).totalMora;
+  },
   saldoCapital(p){
     const abonadoCapital = (p.abonos||[]).reduce((a,x)=> a + Number(x.capital!==undefined ? x.capital : x.monto || 0), 0);
     return Math.max(0, Number(p.monto) - abonadoCapital);
   },
   interesPendiente(p, hastaFecha){
+    if(p.cuotas) return 0; // En sistema de cuotas fijas el interés ya va dentro de la cuota
     hastaFecha = hastaFecha || this.todayISO();
     const fechaCorte = p.fechaUltimoCorte || p.fecha;
     const dias = this.diasEntre(fechaCorte, hastaFecha);
@@ -498,7 +584,12 @@ const App = {
     return Math.max(0, (Number(p.interesAcumulado)||0) + interesNuevo);
   },
   saldoPrestamo(p){
-    // Saldo total a pagar hoy: capital pendiente + interés acumulado pendiente.
+    if(p.cuotas){
+      // Sistema de cuotas fijas: saldo = total cuotas pendientes + mora
+      const {filas, totalMora} = this.cuotasStatus(p);
+      const cuotasPendientes = filas.filter(f=>f.estado!=='pagado').reduce((a,f)=>a+f.cuota,0);
+      return cuotasPendientes + totalMora;
+    }
     return this.saldoCapital(p) + this.interesPendiente(p);
   },
   saldoVehiculo(v){
@@ -551,22 +642,34 @@ const App = {
     `;
   },
   prestamoCard(p){
-    const capital = this.saldoCapital(p);
-    const interes = this.interesPendiente(p);
-    const saldo = capital + interes;
+    let infoLinea, saldo, moraBadge='';
+    if(p.cuotas){
+      const {filas, totalMora} = this.cuotasStatus(p);
+      const pagadas = filas.filter(f=>f.estado==='pagado').length;
+      const enMora = filas.filter(f=>f.estado==='mora').length;
+      saldo = this.saldoPrestamo(p);
+      infoLinea = `${pagadas}/${p.cuotas} cuotas pagadas · Cuota: ${this.fmtMoney(this.calcCuotaFija(p.monto, p.tasa, p.cuotas))}`;
+      if(enMora>0) moraBadge = `<span class="badge-mora">⚠️ ${enMora} en mora · +${this.fmtMoney(totalMora)}</span>`;
+    } else {
+      const capital = this.saldoCapital(p);
+      const interes = this.interesPendiente(p);
+      saldo = capital + interes;
+      infoLinea = `Capital: ${this.fmtMoney(capital)} · Interés: ${this.fmtMoney(interes)}`;
+    }
     const [estado, clase] = this.estadoSello(saldo, p.fechaLimite);
     return `<div class="item-card">
       <div class="item-top">
         <div><div class="item-title">${this.clienteNombre(p.clienteId)}</div>
-        <div class="item-sub">Desembolsado el ${this.fmtDate(p.fecha)} · Interés ${p.tasa||0}% mensual</div>
+        <div class="item-sub">Desembolsado el ${this.fmtDate(p.fecha)} · Interés ${p.tasa||0}% mensual${p.cuotas?' · '+p.cuotas+' cuotas':''}</div>
         ${this.socioIdsDe(p).length?`<div class="item-sub">Financian: ${this.socioNombres(p)}</div>`:''}
-        <span class="sello ${clase}">${estado}</span></div>
-        <div class="item-amount">${this.fmtMoney(saldo)}<small>total a pagar hoy</small></div>
+        <span class="sello ${clase}">${estado}</span> ${moraBadge}</div>
+        <div class="item-amount">${this.fmtMoney(saldo)}<small>total pendiente hoy</small></div>
       </div>
-      <div class="item-meta">Capital pendiente: <strong>${this.fmtMoney(capital)}</strong> · Interés pendiente: <strong>${this.fmtMoney(interes)}</strong> · Capital inicial: ${this.fmtMoney(p.monto)}</div>
+      <div class="item-meta">${infoLinea} · Capital inicial: ${this.fmtMoney(p.monto)}</div>
       ${p.observaciones?`<div class="item-meta">📝 ${p.observaciones}</div>`:''}
       <div class="item-actions">
         <button class="btn btn-sm btn-gold" onclick="App.openAbono('prestamo','${p.id}')">➕ Abono</button>
+        ${p.cuotas?`<button class="btn btn-sm btn-ghost" style="border-color:var(--gold-dark);color:var(--gold-dark)" onclick="App.openTabla('${p.id}')">📋 Tabla</button>`:''}
         <button class="btn btn-sm btn-ghost" onclick="App.openForm('prestamo','${p.id}')">✏️ Editar</button>
         <button class="btn btn-sm btn-print" onclick="App.imprimirFicha('prestamo','${p.id}')">🖨️ Imprimir</button>
         <button class="btn btn-sm btn-wa" onclick="App.whatsappFicha('prestamo','${p.id}')">💬 WhatsApp</button>
@@ -713,18 +816,25 @@ const App = {
     }
 
     if(type==='prestamo'){
-      const p = id ? this.data.prestamos.find(x=>x.id===id) : {clienteId:'',monto:0,tasa:6,fecha:this.todayISO(),fechaLimite:'',socioIds:[],observaciones:''};
+      const p = id ? this.data.prestamos.find(x=>x.id===id) : {clienteId:'',monto:0,tasa:6,cuotas:12,fecha:this.todayISO(),fechaLimite:'',socioIds:[],observaciones:''};
+      const cuotaFija = p.monto && p.cuotas ? this.calcCuotaFija(p.monto, p.tasa, p.cuotas) : 0;
       html = `<h3>${id?'Editar':'Nueva'} financiación</h3>
         ${this.clientePicker(p.clienteId)}
         <div class="row2">
-          <div class="field"><label>Capital inicial</label><input id="f_monto" type="number" value="${p.monto||0}" ${id?'readonly style="background:#eee"':''}></div>
-          <div class="field"><label>Interés mensual %</label><input id="f_tasa" type="number" step="0.1" value="${p.tasa!==undefined?p.tasa:6}"></div>
+          <div class="field"><label>Capital inicial</label><input id="f_monto" type="number" value="${p.monto||0}" ${id?'readonly style="background:#eee"':''} oninput="App.recalcCuota()"></div>
+          <div class="field"><label>Interés mensual %</label><input id="f_tasa" type="number" step="0.1" value="${p.tasa!==undefined?p.tasa:6}" oninput="App.recalcCuota()"></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label>Número de cuotas pactadas</label><input id="f_cuotas" type="number" min="1" value="${p.cuotas||12}" oninput="App.recalcCuota()"></div>
+          <div class="field"><label>Cuota mensual (calculada)</label>
+            <input id="f_cuotaDisplay" readonly style="background:#e8f0eb;font-weight:700;color:var(--verde)" value="${cuotaFija? this.fmtMoney(cuotaFija):'$0'}">
+          </div>
         </div>
         <div class="row2">
           <div class="field"><label>Fecha de desembolso</label><input id="f_fecha" type="date" value="${p.fecha||this.todayISO()}"></div>
-          <div class="field"><label>Fecha límite de pago</label><input id="f_fechaLimite" type="date" value="${p.fechaLimite||''}"></div>
+          <div class="field"><label>Fecha límite (opcional)</label><input id="f_fechaLimite" type="date" value="${p.fechaLimite||''}"></div>
         </div>
-        ${id?`<div class="habeas-note">💡 El interés se calcula automáticamente sobre el saldo de capital, como en un banco: cada abono primero paga el interés acumulado y el resto abona a capital.</div>`:''}
+        <div class="habeas-note">💡 El sistema calcula la cuota fija (método francés). Cada abono paga primero la cuota del mes más mora si aplica. Si el cliente se pasa <strong>3 días</strong>, se cobra mora del 6% mensual sobre la cuota.</div>
         ${this.socioPicker(this.socioIdsDe(p))}
         <div class="field"><label>Observaciones</label><textarea id="f_observaciones" rows="2">${p.observaciones||''}</textarea></div>
         <div class="modal-actions">
@@ -789,6 +899,79 @@ const App = {
   getSelectedSocios(){
     return Array.from(document.querySelectorAll('.f_socioCheck:checked')).map(el=>el.value);
   },
+  recalcCuota(){
+    const monto = Number(this.v('f_monto'))||0;
+    const tasa  = Number(this.v('f_tasa'))||0;
+    const cuotas= Number(this.v('f_cuotas'))||0;
+    const el = document.getElementById('f_cuotaDisplay');
+    if(!el) return;
+    el.value = cuotas>0 && monto>0 ? this.fmtMoney(this.calcCuotaFija(monto, tasa, cuotas)) : '$0';
+  },
+
+  openTabla(pid){
+    const p = this.data.prestamos.find(x=>x.id===pid);
+    if(!p) return;
+    const {filas, totalMora, dineroDisponible} = this.cuotasStatus(p);
+    const cuotaFija = this.calcCuotaFija(p.monto, p.tasa, p.cuotas);
+    const pagadas = filas.filter(f=>f.estado==='pagado').length;
+    const enMora = filas.filter(f=>f.estado==='mora').length;
+    const totalPagado = (p.abonos||[]).reduce((a,x)=>a+Number(x.monto||0),0);
+    const iconos = {pagado:'✅', mora:'🔴', activa:'▶️', pendiente:'⏳'};
+    const clases = {pagado:'tr-pagado', mora:'tr-mora', activa:'tr-activa', pendiente:'tr-pendiente'};
+    const filaHTML = filas.map(f=>`<tr class="${clases[f.estado]||''}">
+      <td>${iconos[f.estado]||'—'} ${f.n}</td>
+      <td>${this.fmtDate(f.fechaEsperada)}</td>
+      <td>${this.fmtMoney(f.cuota)}</td>
+      <td>${this.fmtMoney(f.interes)}</td>
+      <td>${this.fmtMoney(f.capital)}</td>
+      <td>${this.fmtMoney(f.saldoFinal)}</td>
+      <td>${f.mora>0?'<span class="badge-mora">+'+this.fmtMoney(f.mora)+'</span>':f.estado==='pagado'?'<span class="badge-ok">OK</span>':'—'}</td>
+    </tr>`).join('');
+
+    document.getElementById('modalBody').className = 'modal modal-wide';
+    document.getElementById('modalBody').innerHTML = `
+      <h3>📋 Tabla de amortización — ${this.clienteNombre(p.clienteId)}</h3>
+      <div class="resumen-tabla">
+        <div class="stat-card"><div class="lbl">Capital inicial</div><div class="val" style="font-size:1rem">${this.fmtMoney(p.monto)}</div></div>
+        <div class="stat-card"><div class="lbl">Cuota mensual</div><div class="val" style="font-size:1rem">${this.fmtMoney(cuotaFija)}</div></div>
+        <div class="stat-card"><div class="lbl">Cuotas pagadas</div><div class="val" style="font-size:1rem">${pagadas}/${p.cuotas}</div></div>
+        <div class="stat-card"><div class="lbl">Total pagado</div><div class="val" style="font-size:1rem">${this.fmtMoney(totalPagado)}</div></div>
+        <div class="stat-card"><div class="lbl">Mora acumulada</div><div class="val" style="font-size:1rem;color:var(--rojo)">${this.fmtMoney(totalMora)}</div></div>
+      </div>
+      ${enMora>0?`<div class="habeas-note" style="background:#fdf3f2;color:var(--rojo);margin-bottom:12px">⚠️ ${enMora} cuota(s) en mora. Mora total: <strong>${this.fmtMoney(totalMora)}</strong> (6% mensual sobre la cuota por días de retraso superados los 3 días de gracia).</div>`:''}
+      <div style="overflow-x:auto">
+        <table class="tabla-amort">
+          <thead><tr>
+            <th>#</th><th style="text-align:left">Fecha pago</th>
+            <th>Cuota</th><th>Interés</th><th>Capital</th><th>Saldo</th><th>Mora</th>
+          </tr></thead>
+          <tbody>${filaHTML}</tbody>
+        </table>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-print" onclick="App.imprimirFicha('prestamo','${pid}')">🖨️ Imprimir</button>
+        <button class="btn btn-wa" onclick="App.whatsappTabla('${pid}')">💬 WhatsApp</button>
+        <button class="btn btn-ghost" onclick="App.closeModal();document.getElementById('modalBody').className='modal'">Cerrar</button>
+      </div>`;
+    document.getElementById('modalOverlay').style.display='flex';
+  },
+
+  whatsappTabla(pid){
+    const p = this.data.prestamos.find(x=>x.id===pid);
+    const cli = this.data.clientes.find(c=>c.id===p.clienteId);
+    const {filas, totalMora} = this.cuotasStatus(p);
+    const cuotaFija = this.calcCuotaFija(p.monto, p.tasa, p.cuotas);
+    const pagadas = filas.filter(f=>f.estado==='pagado').length;
+    let txt = `*${this.data.info.nombre}*\n📋 Resumen de financiación\nCliente: ${cli?cli.nombre:''}\nCapital: ${this.fmtMoney(p.monto)}\nInterés: ${p.tasa}% mensual\nCuotas: ${p.cuotas} de ${this.fmtMoney(cuotaFija)}\nPagadas: ${pagadas}/${p.cuotas}\n`;
+    if(totalMora>0) txt += `⚠️ Mora pendiente: ${this.fmtMoney(totalMora)}\n`;
+    txt += `\n*Próximas cuotas:*\n`;
+    filas.filter(f=>f.estado!=='pagado').slice(0,5).forEach(f=>{
+      const icono = f.estado==='mora'?'🔴':f.estado==='activa'?'▶️':'⏳';
+      txt += `${icono} Cuota ${f.n}: ${this.fmtDate(f.fechaEsperada)} — ${this.fmtMoney(f.cuota)}${f.mora>0?' +mora '+this.fmtMoney(f.mora):''}
+`;
+    });
+    window.open(this.waLink(cli?cli.celular:'', txt), '_blank');
+  },
 
   async saveCliente(id){
     const nombre = this.v('f_nombre').trim();
@@ -830,7 +1013,7 @@ const App = {
     const clienteId = this.v('f_clienteId');
     const monto = Number(this.v('f_monto'))||0;
     if(!clienteId || monto<=0){ this.toast('Selecciona el cliente y un monto válido.'); return; }
-    const obj = {clienteId, monto, tasa:Number(this.v('f_tasa'))||0, fecha:this.v('f_fecha'),
+    const obj = {clienteId, monto, tasa:Number(this.v('f_tasa'))||0, cuotas:Number(this.v('f_cuotas'))||0, fecha:this.v('f_fecha'),
       fechaLimite:this.v('f_fechaLimite'), socioIds:this.getSelectedSocios(), observaciones:this.v('f_observaciones').trim()};
     if(id){
       const i = this.data.prestamos.findIndex(x=>x.id===id);
@@ -886,28 +1069,37 @@ const App = {
     this.editing = {type, id};
     const coll = type==='prestamo' ? this.data.prestamos : this.data.vehiculos;
     const item = coll.find(x=>x.id===id);
-    let saldoInfo = '';
-    if(type==='prestamo'){
+    let saldoInfo='', sugerido=0, moraInfo='';
+    if(type==='prestamo' && item.cuotas){
+      const {filas, totalMora} = this.cuotasStatus(item);
+      const cuotaFija = this.calcCuotaFija(item.monto, item.tasa, item.cuotas);
+      const cuotaActual = filas.find(f=>f.estado==='mora'||f.estado==='activa') || filas.find(f=>f.estado==='pendiente');
+      sugerido = cuotaActual ? cuotaActual.cuota + (cuotaActual.mora||0) : 0;
+      saldoInfo = `Cuota mensual: <strong>${this.fmtMoney(cuotaFija)}</strong> · Cuotas pagas: <strong>${filas.filter(f=>f.estado==='pagado').length}/${item.cuotas}</strong>`;
+      if(totalMora>0) moraInfo=`<div class="habeas-note" style="background:#fdf3f2;color:var(--rojo)">⚠️ Mora acumulada: <strong>${this.fmtMoney(totalMora)}</strong>. Se recomienda cobrar la cuota + mora: <strong>${this.fmtMoney(sugerido)}</strong></div>`;
+    } else if(type==='prestamo'){
       const capital = this.saldoCapital(item);
       const interes = this.interesPendiente(item);
-      saldoInfo = `Capital pendiente: <strong>${this.fmtMoney(capital)}</strong> · Interés pendiente: <strong>${this.fmtMoney(interes)}</strong> · Total hoy: <strong>${this.fmtMoney(capital+interes)}</strong>`;
+      saldoInfo = `Capital pendiente: <strong>${this.fmtMoney(capital)}</strong> · Interés pendiente: <strong>${this.fmtMoney(interes)}</strong>`;
+      sugerido = interes;
     } else {
       saldoInfo = `Saldo actual: <strong>${this.fmtMoney(this.saldoVehiculo(item))}</strong>`;
     }
-    const rows = (item.abonos||[]).map(a=>{
+    const rows = (item.abonos||[]).slice().reverse().slice(0,8).map(a=>{
       if(type==='prestamo' && a.capital!==undefined){
-        return `<div class="abono-row"><span>${this.fmtDate(a.fecha)}</span><span>${this.fmtMoney(a.monto)} <small style="color:var(--ink-soft)">(cap. ${this.fmtMoney(a.capital)} + int. ${this.fmtMoney(a.interes)})</small></span></div>`;
+        return `<div class="abono-row"><span>${this.fmtDate(a.fecha)}</span><span>${this.fmtMoney(a.monto)} <small style="color:var(--ink-soft)">(cap. ${this.fmtMoney(a.capital)} + int. ${this.fmtMoney(a.interes)}${a.mora?` + mora ${this.fmtMoney(a.mora)}`:''})</small></span></div>`;
       }
       return `<div class="abono-row"><span>${this.fmtDate(a.fecha)}</span><span>${this.fmtMoney(a.monto)}</span></div>`;
     }).join('') || '<div class="abono-row"><span>Sin abonos registrados</span></div>';
     document.getElementById('modalBody').innerHTML = `
       <h3>Registrar abono</h3>
       <p class="item-sub">${type==='prestamo'?this.clienteNombre(item.clienteId):item.marca+' '+item.modelo}</p>
-      <p class="item-sub">${saldoInfo}</p>
-      <div class="field"><label>Monto del abono</label><input id="f_abonoMonto" type="number"></div>
+      <p class="item-sub" style="margin-bottom:10px">${saldoInfo}</p>
+      ${moraInfo}
+      <div class="field"><label>Monto del abono ${sugerido>0?`(sugerido: ${this.fmtMoney(sugerido)})`:''}
+      </label><input id="f_abonoMonto" type="number" placeholder="${sugerido||''}"></div>
       <div class="field"><label>Fecha</label><input id="f_abonoFecha" type="date" value="${this.todayISO()}"></div>
-      ${type==='prestamo'?'<div class="habeas-note">El abono se aplica primero al interés acumulado y lo que sobra abona a capital, igual que en un banco.</div>':''}
-      <label style="font-size:.78rem;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);font-weight:600;display:block;margin-top:10px;">Historial</label>
+      <label style="font-size:.78rem;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);font-weight:600;display:block;margin-top:10px;">Últimos abonos</label>
       <div class="abono-list">${rows}</div>
       <div class="modal-actions">
         <button class="btn btn-ghost" onclick="App.closeModal()">Cancelar</button>
@@ -924,7 +1116,14 @@ const App = {
     const item = coll.find(x=>x.id===id);
     item.abonos = item.abonos || [];
 
-    if(type==='prestamo'){
+    if(type==='prestamo' && item.cuotas){
+      // Sistema de cuotas: registrar abono simple; el estado se calcula dinámicamente
+      const {totalMora} = this.cuotasStatus(item);
+      const moraCobrada = Math.min(monto, totalMora);
+      const restante = monto - moraCobrada;
+      item.abonos.push({fecha, monto, capital: restante, interes:0, mora: moraCobrada});
+      this.registrarMovimiento('Abono cuota', `Abono de ${this.clienteNombre(item.clienteId)}${moraCobrada>0?' (incl. mora '+this.fmtMoney(moraCobrada)+')':''}`, monto);
+    } else if(type==='prestamo'){
       const capitalAntes = this.saldoCapital(item);
       const interesAcumuladoHoy = this.interesPendiente(item, fecha);
       const interesPagado = Math.min(monto, interesAcumuladoHoy);
@@ -963,18 +1162,23 @@ const App = {
         <div class="foot">Generado ${this.fmtDate(this.todayISO())}</div>`;
     }
     if(tipo==='prestamo'){
+      const cuotaFija = item.cuotas ? this.calcCuotaFija(item.monto, item.tasa, item.cuotas) : 0;
+      const totalMora = item.cuotas ? this.moraTotal(item) : 0;
+      const pagadas = item.cuotas ? this.cuotasStatus(item).filas.filter(f=>f.estado==='pagado').length : 0;
       const capital = this.saldoCapital(item);
-      const interes = this.interesPendiente(item);
+      const interes = item.cuotas ? 0 : this.interesPendiente(item);
+      const saldo = this.saldoPrestamo(item);
       return `<h4>${neg}</h4><div class="sub">Comprobante de financiación</div><hr>
         <div class="rline"><span>Cliente</span><span>${this.clienteNombre(item.clienteId)}</span></div>
         <div class="rline"><span>Fecha</span><span>${this.fmtDate(item.fecha)}</span></div>
         <div class="rline"><span>Capital inicial</span><span>${this.fmtMoney(item.monto)}</span></div>
         <div class="rline"><span>Interés mensual</span><span>${item.tasa||0}%</span></div>
-        ${item.fechaLimite?`<div class="rline"><span>Fecha límite</span><span>${this.fmtDate(item.fechaLimite)}</span></div>`:''}
+        ${item.cuotas?`<div class="rline"><span>Cuotas pactadas</span><span>${item.cuotas} × ${this.fmtMoney(cuotaFija)}</span></div>
+        <div class="rline"><span>Cuotas pagadas</span><span>${pagadas} de ${item.cuotas}</span></div>`:`<div class="rline"><span>Interés pendiente</span><span>${this.fmtMoney(interes)}</span></div>`}
         <hr>
         <div class="rline"><span>Capital pendiente</span><span>${this.fmtMoney(capital)}</span></div>
-        <div class="rline"><span>Interés pendiente</span><span>${this.fmtMoney(interes)}</span></div>
-        <div class="rline total"><span>Total a pagar hoy</span><span>${this.fmtMoney(capital+interes)}</span></div>
+        ${totalMora>0?`<div class="rline" style="color:#8C3B2E"><span>⚠️ Mora</span><span>${this.fmtMoney(totalMora)}</span></div>`:''}
+        <div class="rline total"><span>Total a pagar hoy</span><span>${this.fmtMoney(saldo)}</span></div>
         <div class="foot">Documento de soporte interno — ${neg}</div>`;
     }
     if(tipo==='vehiculo'){
@@ -1030,9 +1234,18 @@ const App = {
     }
     if(tipo==='prestamo'){
       const cli = this.data.clientes.find(c=>c.id===item.clienteId);
+      const cuotaFija = item.cuotas ? this.calcCuotaFija(item.monto, item.tasa, item.cuotas) : 0;
+      const totalMora = item.cuotas ? this.moraTotal(item) : 0;
+      const pagadas = item.cuotas ? this.cuotasStatus(item).filas.filter(f=>f.estado==='pagado').length : 0;
       const capital = this.saldoCapital(item);
-      const interes = this.interesPendiente(item);
-      txt = `*${neg}*\nComprobante de financiación\nCliente: ${cli?cli.nombre:''}\nFecha: ${this.fmtDate(item.fecha)}\nCapital inicial: ${this.fmtMoney(item.monto)}\nInterés mensual: ${item.tasa||0}%\nCapital pendiente: ${this.fmtMoney(capital)}\nInterés pendiente: ${this.fmtMoney(interes)}\nTotal a pagar hoy: ${this.fmtMoney(capital+interes)}`;
+      const interes = item.cuotas ? 0 : this.interesPendiente(item);
+      const saldo = this.saldoPrestamo(item);
+      txt = `*${neg}*\nComprobante de financiación\nCliente: ${cli?cli.nombre:''}\nCapital inicial: ${this.fmtMoney(item.monto)}\nInterés mensual: ${item.tasa||0}%`;
+      if(item.cuotas) txt += `\nCuotas: ${item.cuotas} de ${this.fmtMoney(cuotaFija)}\nPagadas: ${pagadas}/${item.cuotas}`;
+      txt += `\nCapital pendiente: ${this.fmtMoney(capital)}`;
+      if(!item.cuotas) txt += `\nInterés pendiente: ${this.fmtMoney(interes)}`;
+      if(totalMora>0) txt += `\n⚠️ Mora: ${this.fmtMoney(totalMora)}`;
+      txt += `\nTotal a pagar hoy: ${this.fmtMoney(saldo)}`;
       phone = cli?cli.celular:'';
     }
     if(tipo==='vehiculo'){
