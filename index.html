@@ -316,11 +316,10 @@ const App = {
 
   async save(){
     try{
-      const r = await window.storage.set(`${this.STORAGE_PREFIX}:${this.token}`, JSON.stringify(this.data), true);
-      if(!r){ this.toast('⚠️ No se pudo guardar. Intenta de nuevo.'); }
+      localStorage.setItem(`${this.STORAGE_PREFIX}:${this.token}`, JSON.stringify(this.data));
     }catch(e){
       console.error(e);
-      this.toast('⚠️ Error guardando los datos.');
+      this.toast('⚠️ Error guardando los datos en este dispositivo.');
     }
   },
 
@@ -338,8 +337,8 @@ const App = {
     d.info.nombre = nombre;
     d.info.telefonoAdmin = tel;
     try{
-      await window.storage.set(`${this.STORAGE_PREFIX}:${tok}`, JSON.stringify(d), true);
-      this.loginMsg(`Negocio creado. Tu token es ${tok}. Guárdalo: lo necesitarás para entrar desde otro celular o PC.`, false);
+      localStorage.setItem(`${this.STORAGE_PREFIX}:${tok}`, JSON.stringify(d));
+      this.loginMsg(`Negocio creado. Tu token es ${tok}. Guárdalo: por ahora la información queda solo en este celular o computador.`, false);
       document.getElementById('tokenInput').value = tok;
     }catch(e){
       console.error(e);
@@ -356,10 +355,10 @@ const App = {
     const tok = document.getElementById('tokenInput').value.trim().toUpperCase();
     if(!tok){ this.loginMsg('Ingresa el código del negocio.', true); return; }
     try{
-      const r = await window.storage.get(`${this.STORAGE_PREFIX}:${tok}`, true);
-      if(!r){ this.loginMsg('Ese código no existe todavía. Si eres el administrador, créalo abajo.', true); return; }
+      const raw = localStorage.getItem(`${this.STORAGE_PREFIX}:${tok}`);
+      if(!raw){ this.loginMsg('Ese código no existe en este dispositivo todavía. Si eres el administrador, créalo abajo, o restaura un backup después de ingresar.', true); return; }
       this.token = tok;
-      this.data = JSON.parse(r.value);
+      this.data = JSON.parse(raw);
       // migración suave de campos faltantes
       this.data.socios = this.data.socios || [];
       this.data.clientes = this.data.clientes || [];
@@ -368,7 +367,7 @@ const App = {
       this.data.movimientos = this.data.movimientos || [];
       this.boot();
     }catch(e){
-      this.loginMsg('Ese código no existe todavía. Si eres el administrador, créalo abajo.', true);
+      this.loginMsg('Ese código no existe en este dispositivo. Si eres el administrador, créalo abajo.', true);
     }
   },
 
@@ -990,7 +989,7 @@ const App = {
     document.getElementById('modalBody').innerHTML = `
       <h3>Administración</h3>
       <div class="admin-panel">
-        <p class="item-sub">Comparte este token para entrar al mismo negocio desde otro celular o el PC de la oficina. Funciona como una contraseña: cualquiera que lo tenga puede ver y editar esta información.</p>
+        <p class="item-sub">⚠️ Por ahora la información se guarda <strong>solo en este celular o computador</strong> (no se sincroniza sola todavía). Para pasar los datos a otro dispositivo: usa "Backup" aquí, y en el otro dispositivo entra con este mismo token y usa "Restaurar backup" con ese archivo.</p>
         <div class="tok-display">${this.token}</div>
         <div class="modal-actions" style="justify-content:center">
           <button class="btn btn-sm btn-ghost" onclick="App.copyToken()">📋 Copiar token</button>
@@ -1025,7 +1024,7 @@ const App = {
   },
 
   shareToken(){
-    const txt = `Código de acceso para *${this.data.info.nombre}* en Libro Mayor:\n\n${this.token}\n\nGuárdalo, lo necesitas para entrar desde cualquier celular o PC.`;
+    const txt = `Código de acceso para *${this.data.info.nombre}* en Libro Mayor:\n\n${this.token}\n\nGuárdalo. Por ahora úsalo junto con el archivo de backup para llevar la información a otro celular o PC.`;
     window.open(this.waLink(this.data.info.telefonoAdmin, txt), '_blank');
   },
 
